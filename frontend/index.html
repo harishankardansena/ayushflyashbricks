@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ayush Fly Ash Bricks – Factory Management System</title>
+  <meta name="description"
+    content="Complete factory management system for fly ash brick production, inventory, billing and expense tracking." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/jpeg" href="png.jpeg" />
+  <link rel="apple-touch-icon" href="png.jpeg" />
+</head>
+
+<body>
+  <!-- LOGIN PAGE -->
+  <div id="loginPage" class="login-page">
+    <div class="login-bg">
+      <div class="login-orb orb1"></div>
+      <div class="login-orb orb2"></div>
+      <div class="login-orb orb3"></div>
+    </div>
+    <div class="login-card">
+      <div class="login-logo">
+        <img src="png.jpeg" alt="Logo" class="login-logo-img" />
+        <h1>Ayush Fly Ash Bricks</h1>
+        <p>Factory Management System</p>
+      </div>
+      <form id="loginForm" class="login-form">
+        <div class="form-group">
+          <label for="loginEmail">Email Address</label>
+          <div class="input-wrap">
+            <span class="input-icon">✉️</span>
+            <input type="email" id="loginEmail" placeholder="admin@flyashbricks.com" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="loginPassword" placeholder="Enter your password" required />
+            <button type="button" class="toggle-pass" onclick="togglePassword()">👁️</button>
+          </div>
+        </div>
+        <div id="loginError" class="login-error hidden"></div>
+        <button type="submit" class="btn-primary btn-full" id="loginBtn">
+          <span>Sign In</span>
+        </button>
+      </form>
+      <p class="login-footer">Secure Admin Access Only</p>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="mainApp" class="hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">🧱</div>
+        <div class="sidebar-title">
+          <span class="title-main">Ayush Fly Ash</span>
+          <span class="title-sub">Bricks Factory</span>
+        </div>
+        <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="dashboard" onclick="navigateTo('dashboard')">
+          <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-page="production" onclick="navigateTo('production')">
+          <span class="nav-icon">🏭</span><span class="nav-label">Production</span>
+        </a>
+        <a href="#" class="nav-item" data-page="inventory" onclick="navigateTo('inventory')">
+          <span class="nav-icon">📦</span><span class="nav-label">Inventory</span>
+        </a>
+        <a href="#" class="nav-item" data-page="expenses" onclick="navigateTo('expenses')">
+          <span class="nav-icon">💸</span><span class="nav-label">Expenses</span>
+        </a>
+        <a href="#" class="nav-item" data-page="billing" onclick="navigateTo('billing')">
+          <span class="nav-icon">🧾</span><span class="nav-label">Billing</span>
+        </a>
+        <a href="#" class="nav-item" data-page="reports" onclick="navigateTo('reports')">
+          <span class="nav-icon">📥</span><span class="nav-label">Reports</span>
+        </a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="admin-info">
+          <div class="admin-avatar">A</div>
+          <div class="admin-details">
+            <span class="admin-name" id="adminName">Admin</span>
+            <span class="admin-role">Factory Manager</span>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="logout()">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <!-- Topbar -->
+      <header class="topbar">
+        <button class="hamburger" onclick="toggleSidebar()">☰</button>
+        <div class="topbar-title" id="pageTitle">Dashboard</div>
+        <div class="topbar-right">
+          <div class="date-display" id="topbarDate"></div>
+          <div class="notification-bell" id="notifBell" onclick="toggleNotifPanel()">
+            🔔 <span class="notif-badge hidden" id="notifBadge">0</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Notification Panel -->
+      <div class="notif-panel hidden" id="notifPanel">
+        <div class="notif-header">⚠️ Low Stock Alerts</div>
+        <div id="notifList"></div>
+      </div>
+
+      <!-- Pages -->
+      <div class="page-container">
+        <!-- DASHBOARD -->
+        <div id="page-dashboard" class="page active">
+          <div class="page-header">
+            <h2>Dashboard Overview</h2>
+            <p>Factory performance at a glance</p>
+          </div>
+          <div class="stats-grid" id="dashboardStats">
+            <!-- Filled by JS -->
+          </div>
+          <div class="charts-row">
+            <div class="chart-card">
+              <div class="chart-title">📈 7-Day Production vs Sales</div>
+              <canvas id="productionChart" height="100"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">💰 Monthly Expense Breakdown</div>
+              <canvas id="expenseChart" height="100"></canvas>
+            </div>
+          </div>
+          <div class="alerts-section" id="alertsSection"></div>
+        </div>
+
+        <!-- PRODUCTION -->
+        <div id="page-production" class="page hidden">
+          <div class="page-header">
+            <h2>Production Management</h2>
+            <p>Track daily brick production and sales</p>
+            <button class="btn-primary" onclick="openModal('productionModal')">+ Add Entry</button>
+          </div>
+          <div class="filter-bar">
+            <select id="prodMonth" onchange="loadProduction()">
+              <option value="">All Months</option>
+            </select>
+            <select id="prodYear" onchange="loadProduction()">
+              <option value="">All Years</option>
+            </select>
+          </div>
+          <div class="table-card">
+            <table class="data-table" id="productionTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Previous Stock</th>
+                  <th>Produced</th>
+                  <th>Sold</th>
+                  <th>Current Stock</th>
+                  <th>Notes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="productionBody"></tbody>
+            </table>
+            <div class="pagination" id="prodPagination"></div>
+          </div>
+        </div>
+
+        <!-- INVENTORY -->
+        <div id="page-inventory" class="page hidden">
+          <div class="page-header">
+            <h2>Inventory Management</h2>
+            <p>Monitor raw material stock levels</p>
+            <button class="btn-primary" onclick="openModal('inventoryModal')">+ Add Material</button>
+          </div>
+          <div class="inventory-grid" id="inventoryGrid"></div>
+
+          <!-- USAGE TRACKER SECTION -->
+          <div class="page-header" style="margin-top: 3rem;">
+            <h2>Material Usage Tracker</h2>
+            <p>Log and track manual material consumption</p>
+            <button class="btn-primary" onclick="openModal('usageModal')">+ Log Usage</button>
+          </div>
+          <div class="filter-bar">
+            <select id="usageMonth" onchange="loadUsage()">
+              <option value="">All Months</option>
+            </select>
+            <select id="usageYear" onchange="loadUsage()">
+              <option value="">All Years</option>
+            </select>
+            <select id="usageMaterial" onchange="loadUsage()">
+              <option value="">All Materials</option>
+              <option>Fly Ash</option>
+              <option>Cement</option>
+              <option>Lime</option>
+              <option>Bed Material</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Material</th>
+                  <th>Used Quantity</th>
+                  <th>Purpose</th>
+                  <th>Remaining</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="usageBody"></tbody>
+            </table>
+            <div class="pagination" id="usagePagination"></div>
+          </div>
+        </div>
+
+        <!-- EXPENSES -->
+        <div id="page-expenses" class="page hidden">
+          <div class="page-header">
+            <h2>Expense Tracker</h2>
+            <p>Manage factory expenses and costs</p>
+            <button class="btn-primary" onclick="openModal('expenseModal')">+ Add Expense</button>
+          </div>
+          <div class="filter-bar">
+            <select id="expMonth" onchange="loadExpenses()">
+              <option value="">All Months</option>
+            </select>
+            <select id="expYear" onchange="loadExpenses()">
+              <option value="">All Years</option>
+            </select>
+            <select id="expCategory" onchange="loadExpenses()">
+              <option value="">All Categories</option>
+              <option>Labour</option>
+              <option>Electricity</option>
+              <option>Transport</option>
+              <option>Raw Material</option>
+              <option>Maintenance</option>
+              <option>Miscellaneous</option>
+            </select>
+          </div>
+          <div class="expense-summary" id="expenseSummary"></div>
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Payment</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="expenseBody"></tbody>
+            </table>
+            <div class="pagination" id="expPagination"></div>
+          </div>
+        </div>
+
+        <!-- BILLING -->
+        <div id="page-billing" class="page hidden">
+          <div class="page-header">
+            <h2>Billing System</h2>
+            <p>Generate and manage customer bills</p>
+            <button class="btn-primary" onclick="openModal('billingModal')">+ New Bill</button>
+          </div>
+          <div class="filter-bar">
+            <select id="billMonth" onchange="loadBilling()">
+              <option value="">All Months</option>
+            </select>
+            <select id="billYear" onchange="loadBilling()">
+              <option value="">All Years</option>
+            </select>
+            <input type="text" id="billSearch" placeholder="Search by name, phone, bill no..."
+              oninput="loadBilling()" />
+          </div>
+          <div class="billing-totals" id="billingTotals"></div>
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Bill No</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Bricks</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="billingBody"></tbody>
+            </table>
+            <div class="pagination" id="billPagination"></div>
+          </div>
+        </div>
+
+        <!-- REPORTS -->
+        <div id="page-reports" class="page hidden">
+          <div class="page-header">
+            <h2>Monthly Reports</h2>
+            <p>Download complete monthly data as Excel</p>
+          </div>
+          <div class="reports-card">
+            <div class="reports-icon">📊</div>
+            <h3>Download Monthly Excel Report</h3>
+            <p>Includes Production, Inventory, Expenses, Billing & Summary sheets</p>
+            <div class="report-selectors">
+              <div class="form-group">
+                <label>Select Month</label>
+                <select id="reportMonth" class="report-select">
+                  <option value="1">January</option>
+                  <option value="2">February</option>
+                  <option value="3">March</option>
+                  <option value="4">April</option>
+                  <option value="5">May</option>
+                  <option value="6">June</option>
+                  <option value="7">July</option>
+                  <option value="8">August</option>
+                  <option value="9">September</option>
+                  <option value="10">October</option>
+                  <option value="11">November</option>
+                  <option value="12">December</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Select Year</label>
+                <select id="reportYear" class="report-select"></select>
+              </div>
+            </div>
+            <button class="btn-primary btn-large" onclick="downloadReport()">
+              ⬇️ Download Excel Report
+            </button>
+            <div class="report-features">
+              <div class="feature-tag">✅ Production Data</div>
+              <div class="feature-tag">✅ Inventory Status</div>
+              <div class="feature-tag">✅ Expense Details</div>
+              <div class="feature-tag">✅ Billing Records</div>
+              <div class="feature-tag">✅ Summary Sheet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODALS ===== -->
+
+  <!-- Production Modal -->
+  <div class="modal-overlay hidden" id="productionModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="prodModalTitle">Add Production Entry</h3>
+        <button onclick="closeModal('productionModal')">✕</button>
+      </div>
+      <form id="productionForm">
+        <input type="hidden" id="prodEditId" />
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="prodDate" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Bricks Produced *</label>
+            <input type="number" id="prodProduced" min="0" placeholder="e.g. 5000" required />
+          </div>
+          <div class="form-group">
+            <label>Bricks Sold *</label>
+            <input type="number" id="prodSold" min="0" placeholder="e.g. 3000" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="prodNotes" placeholder="Optional notes..." rows="2"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('productionModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Save Entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Inventory Modal -->
+  <div class="modal-overlay hidden" id="inventoryModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="invModalTitle">Add Raw Material</h3>
+        <button onclick="closeModal('inventoryModal')">✕</button>
+      </div>
+      <form id="inventoryForm">
+        <input type="hidden" id="invEditId" />
+        <div class="form-group">
+          <label>Material *</label>
+          <select id="invMaterial" required>
+            <option value="">Select Material</option>
+            <option>Fly Ash</option>
+            <option>Cement</option>
+            <option>Lime</option>
+            <option>Bed Material</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantity *</label>
+            <input type="number" id="invQty" min="0" step="0.01" placeholder="e.g. 5000" required />
+          </div>
+          <div class="form-group">
+            <label>Unit *</label>
+            <select id="invUnit">
+              <option value="kg">kg</option>
+              <option value="tonnes">tonnes</option>
+              <option value="liters">liters</option>
+              <option value="bags">bags</option>
+              <option value="cubic meters">cubic meters</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Minimum Level Alert</label>
+          <input type="number" id="invMinLevel" min="0" placeholder="e.g. 500" />
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="invNotes" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('inventoryModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Save Material</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Usage Modal -->
+  <div class="modal-overlay hidden" id="usageModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Log Material Usage</h3>
+        <button onclick="closeModal('usageModal')">✕</button>
+      </div>
+      <form id="usageForm">
+        <div class="form-group">
+          <label>Select Material *</label>
+          <select id="usageInvId" required>
+            <option value="">Choose Material</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Used Quantity *</label>
+            <input type="number" id="usageQty" min="0" step="0.01" placeholder="e.g. 100" required />
+          </div>
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="usageDate" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Purpose *</label>
+          <input type="text" id="usagePurpose" placeholder="e.g. Production of 5000 bricks" required />
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="usageNotes" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('usageModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Save Usage</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+
+  <!-- Expense Modal -->
+  <div class="modal-overlay hidden" id="expenseModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="expModalTitle">Add Expense</h3>
+        <button onclick="closeModal('expenseModal')">✕</button>
+      </div>
+      <form id="expenseForm">
+        <input type="hidden" id="expEditId" />
+        <div class="form-row">
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="expDate" required />
+          </div>
+          <div class="form-group">
+            <label>Category *</label>
+            <select id="expCat" required>
+              <option value="">Select</option>
+              <option>Labour</option>
+              <option>Electricity</option>
+              <option>Transport</option>
+              <option>Raw Material</option>
+              <option>Maintenance</option>
+              <option>Miscellaneous</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description *</label>
+          <input type="text" id="expDesc" placeholder="e.g. Daily labour wages" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Amount (₹) *</label>
+            <input type="number" id="expAmount" min="0" step="0.01" placeholder="e.g. 5000" required />
+          </div>
+          <div class="form-group">
+            <label>Payment Mode</label>
+            <select id="expPayMode">
+              <option>Cash</option>
+              <option>Online</option>
+              <option>Cheque</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('expenseModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Save Expense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Billing Modal -->
+  <div class="modal-overlay hidden" id="billingModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Generate New Bill</h3>
+        <button onclick="closeModal('billingModal')">✕</button>
+      </div>
+      <form id="billingForm">
+        <div class="bill-preview-header">
+          <div class="bill-no-preview">Bill No: <span id="previewBillNo">Auto Generated</span></div>
+        </div>
+        <div class="form-section-title">Customer Information</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Customer Name *</label>
+            <input type="text" id="billCustName" placeholder="Full name" required />
+          </div>
+          <div class="form-group">
+            <label>Phone Number *</label>
+            <input type="tel" id="billCustPhone" placeholder="10-digit mobile" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Address *</label>
+          <textarea id="billCustAddr" rows="2" placeholder="Full delivery address" required></textarea>
+        </div>
+        <div class="form-section-title">Order Details</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Bill Date *</label>
+            <input type="date" id="billDate" required />
+          </div>
+          <div class="form-group">
+            <label>Payment Status</label>
+            <select id="billPayStatus">
+              <option>Paid</option>
+              <option>Pending</option>
+              <option>Partial</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Number of Bricks *</label>
+            <input type="number" id="billBricks" min="1" placeholder="e.g. 10000" required oninput="calcBillTotal()" />
+          </div>
+          <div class="form-group">
+            <label>Rate per Brick (₹) *</label>
+            <input type="number" id="billRate" min="0" step="0.01" placeholder="e.g. 6.50" required
+              oninput="calcBillTotal()" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Discount (₹)</label>
+            <input type="number" id="billDiscount" min="0" step="0.01" placeholder="0" oninput="calcBillTotal()" />
+          </div>
+          <div class="form-group">
+            <label>Notes</label>
+            <input type="text" id="billNotes" placeholder="Optional" />
+          </div>
+        </div>
+        <div class="bill-total-preview" id="billTotalPreview">
+          <div class="total-row"><span>Total Amount:</span><span id="calcTotal">₹0</span></div>
+          <div class="total-row"><span>Discount:</span><span id="calcDiscount">₹0</span></div>
+          <div class="total-row final"><span>Final Amount:</span><span id="calcFinal">₹0</span></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('billingModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Generate Bill</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bill View Modal -->
+  <div class="modal-overlay hidden" id="billViewModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Bill Details</h3>
+        <button onclick="closeModal('billViewModal')">✕</button>
+      </div>
+      <div id="billViewContent" class="bill-print-area"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('billViewModal')">Close</button>
+        <button class="btn-primary" onclick="printBill()">🖨️ Print Bill</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast hidden" id="toast"></div>
+
+  <!-- Confirm Delete -->
+  <div class="modal-overlay hidden" id="confirmModal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3>Confirm Delete</h3>
+        <button onclick="closeModal('confirmModal')">✕</button>
+      </div>
+      <div style="padding: 1rem 1.5rem;">
+        <p id="confirmMessage">Are you sure you want to delete this record?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+        <button class="btn-danger" id="confirmBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
