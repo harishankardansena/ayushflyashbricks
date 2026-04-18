@@ -1,0 +1,20 @@
+{
+  "name": "Ayush Fly Ash Bricks",
+  "short_name": "Ayush Bricks",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0d0f14",
+  "theme_color": "#6c63ff",
+  "icons": [
+    {
+      "src": "png.jpeg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "png.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
