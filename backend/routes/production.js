@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Production = require('../models/Production');
+const { syncStock } = require('../utils/stockUtils');
 
 // GET /api/production - List all with pagination
 router.get('/', auth, async (req, res) => {
@@ -28,13 +29,22 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { date, produced, sold, notes } = req.body;
+    const entryDate = new Date(date);
+    entryDate.setHours(0, 0, 0, 0);
 
-    // Get last record to find previousStock
-    const lastRecord = await Production.findOne({ date: { $lt: new Date(date) } }).sort({ date: -1 });
+    // Get the most recent record before this entry's date OR on the same date but created earlier
+    const lastRecord = await Production.findOne({ 
+      $or: [
+        { date: { $lt: entryDate } },
+        { date: entryDate }
+      ]
+    }).sort({ date: -1, createdAt: -1 });
+
     const previousStock = lastRecord ? lastRecord.currentStock : 0;
 
-    const record = new Production({ date, produced, sold, previousStock, notes });
+    const record = new Production({ date: entryDate, produced, sold, previousStock, notes });
     await record.save();
+    await syncStock();
     res.status(201).json(record);
   } catch (err) {
     console.error(err);
@@ -53,6 +63,7 @@ router.put('/:id', auth, async (req, res) => {
     record.sold = sold;
     record.notes = notes;
     await record.save();
+    await syncStock();
     res.json(record);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -63,6 +74,7 @@ router.put('/:id', auth, async (req, res) => {
 router.delete('/:id', auth, async (req, res) => {
   try {
     await Production.findByIdAndDelete(req.params.id);
+    await syncStock();
     res.json({ message: 'Record deleted' });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });

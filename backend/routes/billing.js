@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Billing = require('../models/Billing');
 const Production = require('../models/Production');
+const { syncStock } = require('../utils/stockUtils');
 
 // Generate bill number: MM-DD-XX format
 async function generateBillNumber(date) {
@@ -19,9 +20,15 @@ async function generateBillNumber(date) {
 // GET /api/billing - List with filters
 router.get('/', auth, async (req, res) => {
   try {
-    const { month, year, page = 1, limit = 20, search } = req.query;
+    const { month, year, page = 1, limit = 20, search, date } = req.query;
     const filter = {};
-    if (month && year) {
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      filter.date = { $gte: start, $lte: end };
+    } else if (month && year) {
       filter.date = {
         $gte: new Date(year, month - 1, 1),
         $lte: new Date(year, month, 0, 23, 59, 59, 999)
@@ -69,13 +76,14 @@ router.get('/:id', auth, async (req, res) => {
 // POST /api/billing - Create new bill
 router.post('/', auth, async (req, res) => {
   try {
-    const { customer, bricks, ratePerBrick, discount, paymentStatus, notes, date } = req.body;
+    const { customer, bricks, ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate, discount, paymentStatus, notes, date } = req.body;
     const billDate = date ? new Date(date) : new Date();
     const billNumber = await generateBillNumber(billDate);
 
     const bill = new Billing({
       billNumber, date: billDate, customer, bricks,
-      ratePerBrick, discount, paymentStatus, notes
+      ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate,
+      discount, paymentStatus, notes
     });
     await bill.save();
 
@@ -85,11 +93,24 @@ router.post('/', auth, async (req, res) => {
     const todayEnd = new Date(billDate);
     todayEnd.setHours(23, 59, 59, 999);
 
-    const prodRecord = await Production.findOne({ date: { $gte: today, $lte: todayEnd } });
+    let prodRecord = await Production.findOne({ date: { $gte: today, $lte: todayEnd } });
     if (prodRecord) {
       prodRecord.sold += bricks;
       await prodRecord.save();
+    } else {
+      // Create a production record for today so stock is tracked
+      const lastRecord = await Production.findOne({ date: { $lt: today } }).sort({ date: -1 });
+      const previousStock = lastRecord ? lastRecord.currentStock : 0;
+      prodRecord = new Production({
+        date: today,
+        produced: 0,
+        sold: bricks,
+        previousStock,
+        notes: 'Auto-created from Billing'
+      });
+      await prodRecord.save();
     }
+    await syncStock();
 
     res.status(201).json(bill);
   } catch (err) {

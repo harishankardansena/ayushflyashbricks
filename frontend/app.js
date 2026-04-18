@@ -174,7 +174,7 @@ function togglePassword() {
 // ============================================================
 // NAVIGATION
 // ============================================================
-function navigateTo(page) {
+function navigateTo(page, filter) {
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => {
     p.classList.remove('active');
@@ -206,8 +206,22 @@ function navigateTo(page) {
   if (page === 'dashboard') loadDashboard();
   else if (page === 'production') loadProduction();
   else if (page === 'inventory') { loadInventory(); loadUsage(); }
-  else if (page === 'expenses') loadExpenses();
-  else if (page === 'billing') loadBilling();
+  else if (page === 'expenses') {
+    if (filter === 'today') {
+      const today = new Date().toISOString().split('T')[0];
+      loadExpenses(1, today);
+    } else {
+      loadExpenses();
+    }
+  }
+  else if (page === 'billing') {
+    if (filter === 'today') {
+      const today = new Date().toISOString().split('T')[0];
+      loadBilling(1, today);
+    } else {
+      loadBilling();
+    }
+  }
 }
 
 function toggleSidebar() {
@@ -245,6 +259,18 @@ async function loadDashboard() {
           ${stockStatus === 'danger' ? '⚠️ Critical' : stockStatus === 'warning' ? '⚠️ Low' : 'Available bricks'}
         </div>
       </div>
+      <div class="stat-card" style="--card-color: rgba(239,68,68,0.3); cursor:pointer" onclick="navigateTo('expenses', 'today')">
+        <div class="stat-icon">💸</div>
+        <div class="stat-label">Today's Expenses</div>
+        <div class="stat-value">₹${fmtMoney(d.today.expenses)}</div>
+        <div class="stat-sub">Click to view logs</div>
+      </div>
+      <div class="stat-card" style="--card-color: rgba(16,185,129,0.3); cursor:pointer" onclick="navigateTo('billing', 'today')">
+        <div class="stat-icon">💵</div>
+        <div class="stat-label">Today's Revenue</div>
+        <div class="stat-value">₹${fmtMoney(d.today.revenue)}</div>
+        <div class="stat-sub">Click to view logs</div>
+      </div>
       <div class="stat-card" style="--card-color: rgba(245,158,11,0.3)">
         <div class="stat-icon">📊</div>
         <div class="stat-label">Monthly Production</div>
@@ -252,13 +278,13 @@ async function loadDashboard() {
         <div class="stat-sub">Sold: ${fmt(d.monthly.sold)}</div>
       </div>
       <div class="stat-card" style="--card-color: rgba(239,68,68,0.3)">
-        <div class="stat-icon">💸</div>
+        <div class="stat-icon">🧾</div>
         <div class="stat-label">Monthly Expenses</div>
         <div class="stat-value">₹${fmtMoney(d.monthly.expenses)}</div>
         <div class="stat-sub">This month</div>
       </div>
       <div class="stat-card" style="--card-color: rgba(16,185,129,0.3)">
-        <div class="stat-icon">💵</div>
+        <div class="stat-icon">💰</div>
         <div class="stat-label">Monthly Revenue</div>
         <div class="stat-value">₹${fmtMoney(d.monthly.revenue)}</div>
         <div class="stat-badge ${d.monthly.profit >= 0 ? '' : 'danger'}">
@@ -675,15 +701,22 @@ function closeModal(id) {
 // ============================================================
 let expCurrentPage = 1;
 
-async function loadExpenses(page = 1) {
+async function loadExpenses(page = 1, filterDate = '') {
   expCurrentPage = page;
   const month = document.getElementById('expMonth').value;
   const year = document.getElementById('expYear').value;
   const cat = document.getElementById('expCategory').value;
   let url = `/expenses?page=${page}&limit=15`;
-  if (month) url += `&month=${month}`;
-  if (year) url += `&year=${year}`;
-  if (cat) url += `&category=${encodeURIComponent(cat)}`;
+  if (filterDate) {
+    url += `&date=${filterDate}`;
+    // Clear other filters to avoid visual confusion
+    document.getElementById('expMonth').value = '';
+    document.getElementById('expCategory').value = '';
+  } else {
+    if (month) url += `&month=${month}`;
+    if (year) url += `&year=${year}`;
+    if (cat) url += `&category=${encodeURIComponent(cat)}`;
+  }
 
   try {
     const res = await apiFetch(url);
@@ -772,26 +805,52 @@ function editExpense(id, date, category, description, amount, paymentMode) {
 // ============================================================
 let billCurrentPage = 1;
 
+function toggleGstFields() {
+  const enabled = document.getElementById('billGstEnabled').checked;
+  document.getElementById('gstFields').classList.toggle('hidden', !enabled);
+}
+
 function calcBillTotal() {
   const bricks = parseFloat(document.getElementById('billBricks').value) || 0;
   const rate = parseFloat(document.getElementById('billRate').value) || 0;
+  const worker = parseFloat(document.getElementById('billWorker').value) || 0;
+  const transport = parseFloat(document.getElementById('billTransport').value) || 0;
+  const gstEnabled = document.getElementById('billGstEnabled').checked;
+  const cgstRate = parseFloat(document.getElementById('billCgst').value) || 0;
+  const sgstRate = parseFloat(document.getElementById('billSgst').value) || 0;
   const discount = parseFloat(document.getElementById('billDiscount').value) || 0;
-  const total = bricks * rate;
-  const final = total - discount;
-  document.getElementById('calcTotal').textContent = `₹${fmtMoney(total)}`;
+
+  const itemTotal = bricks * rate;
+  const otherCharges = worker + transport;
+  const taxableAmount = itemTotal + otherCharges - discount;
+
+  let finalAmount = taxableAmount;
+  if (gstEnabled) {
+    const cgst = taxableAmount * (cgstRate / 100);
+    const sgst = taxableAmount * (sgstRate / 100);
+    finalAmount = taxableAmount + cgst + sgst;
+  }
+
+  document.getElementById('calcTotal').textContent = `₹${fmtMoney(itemTotal + otherCharges)}`;
   document.getElementById('calcDiscount').textContent = `₹${fmtMoney(discount)}`;
-  document.getElementById('calcFinal').textContent = `₹${fmtMoney(Math.max(0, final))}`;
+  document.getElementById('calcFinal').textContent = `₹${fmtMoney(Math.max(0, finalAmount))}`;
 }
 
-async function loadBilling(page = 1) {
+async function loadBilling(page = 1, filterDate = '') {
   billCurrentPage = page;
   const month = document.getElementById('billMonth').value;
   const year = document.getElementById('billYear').value;
   const search = document.getElementById('billSearch').value;
   let url = `/billing?page=${page}&limit=15`;
-  if (month) url += `&month=${month}`;
-  if (year) url += `&year=${year}`;
-  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (filterDate) {
+    url += `&date=${filterDate}`;
+    document.getElementById('billMonth').value = '';
+    document.getElementById('billSearch').value = '';
+  } else {
+    if (month) url += `&month=${month}`;
+    if (year) url += `&year=${year}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+  }
 
   try {
     const res = await apiFetch(url);
@@ -850,6 +909,11 @@ document.getElementById('billingForm').addEventListener('submit', async (e) => {
     date: document.getElementById('billDate').value,
     bricks: parseInt(document.getElementById('billBricks').value),
     ratePerBrick: parseFloat(document.getElementById('billRate').value),
+    workerCharge: parseFloat(document.getElementById('billWorker').value) || 0,
+    transportCharge: parseFloat(document.getElementById('billTransport').value) || 0,
+    gstEnabled: document.getElementById('billGstEnabled').checked,
+    cgstRate: parseFloat(document.getElementById('billCgst').value) || 0,
+    sgstRate: parseFloat(document.getElementById('billSgst').value) || 0,
     discount: parseFloat(document.getElementById('billDiscount').value) || 0,
     paymentStatus: document.getElementById('billPayStatus').value,
     notes: document.getElementById('billNotes').value
@@ -906,23 +970,33 @@ async function viewBill(id) {
               <td>Fly Ash Bricks</td>
               <td>${b.bricks.toLocaleString('en-IN')} bricks</td>
               <td>₹${b.ratePerBrick}/brick</td>
-              <td>₹${fmtMoney(b.totalAmount)}</td>
+              <td>₹${fmtMoney(b.bricks * b.ratePerBrick)}</td>
             </tr>
+            ${b.workerCharge > 0 ? `<tr><td colspan="3">Worker Charges</td><td>₹${fmtMoney(b.workerCharge)}</td></tr>` : ''}
+            ${b.transportCharge > 0 ? `<tr><td colspan="3">Transport Charges</td><td>₹${fmtMoney(b.transportCharge)}</td></tr>` : ''}
           </tbody>
         </table>
         <div class="bp-total-box">
           <div style="display:flex;justify-content:space-between;margin-bottom:0.375rem;font-size:0.875rem;color:var(--text2)">
-            <span>Subtotal</span><span>₹${fmtMoney(b.totalAmount)}</span>
+            <span>Taxable Amount</span><span>₹${fmtMoney((b.bricks * b.ratePerBrick) + (b.workerCharge || 0) + (b.transportCharge || 0) - (b.discount || 0))}</span>
           </div>
+          ${b.gstEnabled ? `
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.375rem;font-size:0.875rem;color:var(--text2)">
+              <span>CGST (${b.cgstRate}%)</span><span>₹${fmtMoney(((b.bricks * b.ratePerBrick) + (b.workerCharge || 0) + (b.transportCharge || 0) - (b.discount || 0)) * (b.cgstRate / 100))}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.375rem;font-size:0.875rem;color:var(--text2)">
+              <span>SGST (${b.sgstRate}%)</span><span>₹${fmtMoney(((b.bricks * b.ratePerBrick) + (b.workerCharge || 0) + (b.transportCharge || 0) - (b.discount || 0)) * (b.sgstRate / 100))}</span>
+            </div>
+          ` : ''}
           ${b.discount > 0 ? `<div style="display:flex;justify-content:space-between;margin-bottom:0.375rem;font-size:0.875rem;color:var(--text2)">
-            <span>Discount</span><span>- ₹${fmtMoney(b.discount)}</span>
+            <span>Discount Applied</span><span>- ₹${fmtMoney(b.discount)}</span>
           </div>` : ''}
           <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border2);padding-top:0.5rem;margin-top:0.25rem">
             <span style="font-weight:700">Final Amount</span>
             <span class="bp-final-amount">₹${fmtMoney(b.finalAmount)}</span>
           </div>
           <div style="margin-top:0.5rem;font-size:0.8rem;color:var(--text3)">
-            Payment: <strong style="color:${b.paymentStatus==='Paid'?'var(--success)':b.paymentStatus==='Pending'?'var(--warning)':'var(--info)'}">${b.paymentStatus}</strong>
+            Payment: <strong style="color:${b.paymentStatus === 'Paid' ? 'var(--success)' : b.paymentStatus === 'Pending' ? 'var(--warning)' : 'var(--info)'}">${b.paymentStatus}</strong>
           </div>
         </div>
         ${b.notes ? `<div style="margin-top:0.875rem;font-size:0.8rem;color:var(--text3)">Notes: ${b.notes}</div>` : ''}

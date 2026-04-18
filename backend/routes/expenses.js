@@ -6,9 +6,15 @@ const Expense = require('../models/Expense');
 // GET /api/expenses - List with filters
 router.get('/', auth, async (req, res) => {
   try {
-    const { month, year, category, page = 1, limit = 20 } = req.query;
+    const { month, year, category, date, page = 1, limit = 20 } = req.query;
     const filter = {};
-    if (month && year) {
+    if (date) {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      filter.date = { $gte: start, $lte: end };
+    } else if (month && year) {
       filter.date = {
         $gte: new Date(year, month - 1, 1),
         $lte: new Date(year, month, 0, 23, 59, 59, 999)

@@ -10,6 +10,11 @@ const billingSchema = new mongoose.Schema({
   },
   bricks: { type: Number, required: true, min: 1 },
   ratePerBrick: { type: Number, required: true, min: 0 },
+  workerCharge: { type: Number, default: 0 },
+  transportCharge: { type: Number, default: 0 },
+  gstEnabled: { type: Boolean, default: false },
+  cgstRate: { type: Number, default: 0 },
+  sgstRate: { type: Number, default: 0 },
   totalAmount: { type: Number },
   discount: { type: Number, default: 0 },
   finalAmount: { type: Number },
@@ -19,8 +24,19 @@ const billingSchema = new mongoose.Schema({
 
 // Auto-calculate totals
 billingSchema.pre('save', function(next) {
-  this.totalAmount = this.bricks * this.ratePerBrick;
-  this.finalAmount = this.totalAmount - (this.discount || 0);
+  const itemTotal = this.bricks * this.ratePerBrick;
+  const otherCharges = (this.workerCharge || 0) + (this.transportCharge || 0);
+  const taxableAmount = itemTotal + otherCharges - (this.discount || 0);
+  
+  if (this.gstEnabled) {
+    const cgst = taxableAmount * ((this.cgstRate || 0) / 100);
+    const sgst = taxableAmount * ((this.sgstRate || 0) / 100);
+    this.totalAmount = taxableAmount + cgst + sgst;
+    this.finalAmount = this.totalAmount;
+  } else {
+    this.totalAmount = taxableAmount;
+    this.finalAmount = taxableAmount;
+  }
   next();
 });
 

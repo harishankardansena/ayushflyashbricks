@@ -35,6 +35,18 @@ router.get('/', auth, async (req, res) => {
       { $group: { _id: null, total: { $sum: '$amount' } } }
     ]);
 
+    // Today's expenses
+    const todayExpenses = await Expense.aggregate([
+      { $match: { date: { $gte: today, $lte: todayEnd } } },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+
+    // Today's bricks sold and revenue (from billing)
+    const todayBilling = await Billing.aggregate([
+      { $match: { date: { $gte: today, $lte: todayEnd } } },
+      { $group: { _id: null, totalBricks: { $sum: '$bricks' }, totalRevenue: { $sum: '$finalAmount' } } }
+    ]);
+
     // Monthly revenue (from billing)
     const monthlyRevenue = await Billing.aggregate([
       { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
@@ -70,11 +82,15 @@ router.get('/', auth, async (req, res) => {
     const mp = monthlyProduction[0] || { totalProduced: 0, totalSold: 0 };
     const me = monthlyExpenses[0] || { total: 0 };
     const mr = monthlyRevenue[0] || { total: 0 };
+    const tb = todayBilling[0] || { totalBricks: 0, totalRevenue: 0 };
+    const te = todayExpenses[0] || { total: 0 };
 
     res.json({
       today: {
         produced: todayProduction ? todayProduction.produced : 0,
-        sold: todayProduction ? todayProduction.sold : 0
+        sold: tb.totalBricks,
+        expenses: te.total,
+        revenue: tb.totalRevenue
       },
       currentStock: latestProduction ? latestProduction.currentStock : 0,
       monthly: {
