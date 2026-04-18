@@ -942,7 +942,7 @@ async function viewBill(id) {
     document.getElementById('billViewContent').innerHTML = `
       <div class="bill-print-area">
         <div class="bp-header">
-          <div class="bp-company">🧱 Fly Ash Bricks Factory</div>
+          <div class="bp-company">Ayush Fly Ash Bricks</div>
           <div class="bp-subtitle">Official Sales Invoice</div>
           <div class="bp-billno">Bill No: ${b.billNumber}</div>
           <div style="font-size:0.8rem; color:var(--text3); margin-top:0.25rem">Date: ${new Date(b.date).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}</div>
