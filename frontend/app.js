@@ -51,11 +51,12 @@ function populateYearSelects() {
 
   // Months
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const monthSelects = ['prodMonth', 'expMonth', 'billMonth', 'usageMonth'];
+  const monthSelects = ['prodMonth', 'expMonth', 'billMonth', 'usageMonth', 'attMonth'];
   monthSelects.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.innerHTML = '<option value="">All Months</option>';
+    if (id === 'attMonth') el.innerHTML = '';
+    else el.innerHTML = '<option value="">All Months</option>';
     months.forEach((m, i) => {
       const opt = document.createElement('option');
       opt.value = i + 1;
@@ -80,6 +81,8 @@ function setCurrentMonthFilters() {
   // Report defaults
   const rm = document.getElementById('reportMonth');
   if (rm) rm.value = m;
+  const am = document.getElementById('attMonth');
+  if (am) am.value = m;
 }
 
 function setDefaultDates() {
@@ -195,6 +198,7 @@ function navigateTo(page, filter) {
     inventory: 'Inventory Management',
     expenses: 'Expense Tracker',
     billing: 'Billing System',
+    attendance: 'Attendance & Wages',
     reports: 'Monthly Reports'
   };
   document.getElementById('pageTitle').textContent = titles[page] || page;
@@ -206,6 +210,7 @@ function navigateTo(page, filter) {
   if (page === 'dashboard') loadDashboard();
   else if (page === 'production') loadProduction();
   else if (page === 'inventory') { loadInventory(); loadUsage(); }
+  else if (page === 'attendance') loadAttendance();
   else if (page === 'expenses') {
     if (filter === 'today') {
       const today = new Date().toISOString().split('T')[0];
@@ -682,6 +687,9 @@ function openModal(id) {
     setDefaultDates();
     populateUsageMaterials();
   }
+  if (id === 'workerModal') {
+    loadWorkers();
+  }
 }
 
 function closeModal(id) {
@@ -1143,10 +1151,209 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 // Close notification panel on outside click
-document.addEventListener('click', (e) => {
-  const panel = document.getElementById('notifPanel');
-  const bell = document.getElementById('notifBell');
-  if (!panel.classList.contains('hidden') && !bell.contains(e.target) && !panel.contains(e.target)) {
-    panel.classList.add('hidden');
-  }
 });
+
+// ============================================================
+// ATTENDANCE & PERSONNEL
+// ============================================================
+let attendanceView = 'weekly'; // 'weekly' or 'monthly'
+
+async function loadAttendance() {
+    switchAttView(attendanceView);
+}
+
+function switchAttView(view) {
+    attendanceView = view;
+    const btnW = document.getElementById('btnWeekly');
+    const btnM = document.getElementById('btnMonthly');
+    const monSel = document.getElementById('attMonth');
+    const yrSel = document.getElementById('attYear');
+    const rangeInfo = document.getElementById('weeklyDateRange');
+
+    if (view === 'weekly') {
+        btnW.classList.add('active');
+        btnM.classList.remove('active');
+        monSel.classList.add('hidden');
+        yrSel.classList.add('hidden');
+        rangeInfo.classList.remove('hidden');
+    } else {
+        btnW.classList.remove('active');
+        btnM.classList.add('active');
+        monSel.classList.remove('hidden');
+        yrSel.classList.remove('hidden');
+        rangeInfo.classList.add('hidden');
+    }
+    loadAttendanceReport();
+}
+
+async function loadAttendanceReport() {
+    const month = document.getElementById('attMonth').value;
+    const year = document.getElementById('attYear').value;
+    
+    let start, end;
+    if (attendanceView === 'weekly') {
+        const today = new Date();
+        // Start of current week (Monday)
+        const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)));
+        startOfWeek.setHours(0,0,0,0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23,59,59,999);
+        start = startOfWeek.toISOString();
+        end = endOfWeek.toISOString();
+        document.getElementById('weeklyDateRange').textContent = `${formatDate(start)} to ${formatDate(end)}`;
+    } else {
+        start = new Date(year, month - 1, 1).toISOString();
+        end = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
+    }
+
+    try {
+        const statsRes = await apiFetch(`/attendance/stats?start=${start}&end=${end}`);
+        const stats = await statsRes.json();
+        
+        // Summary Cards
+        const totalWages = stats.reduce((s, r) => s + r.totalWages, 0);
+        const totalOT = stats.reduce((s, r) => s + r.totalOvertime, 0);
+        document.getElementById('attendanceSummaryGrid').innerHTML = `
+            <div class="att-sum-card">
+                <div class="att-sum-label">TOTAL WORKERS</div>
+                <div class="att-sum-value">${stats.length}</div>
+            </div>
+            <div class="att-sum-card">
+                <div class="att-sum-label">ESTIMATED WAGES</div>
+                <div class="att-sum-value">₹${fmtMoney(totalWages)}</div>
+            </div>
+            <div class="att-sum-card">
+                <div class="att-sum-label">TOTAL OVERTIME</div>
+                <div class="att-sum-value">${totalOT} Hrs</div>
+            </div>
+        `;
+
+        // Table Headers
+        const head = document.getElementById('attTableHead');
+        head.innerHTML = `<th>Worker Detail</th><th>Category</th><th>Presence</th><th>OT (Hrs)</th><th>Total Wage (₹)</th>`;
+
+        // Table Body
+        const body = document.getElementById('attTableBody');
+        if (stats.length === 0) {
+            body.innerHTML = '<tr><td colspan="5"><div class="empty-state">No attendance records for this period</div></td></tr>';
+            return;
+        }
+
+        body.innerHTML = stats.map(s => `
+            <tr>
+                <td><strong>${s.workerInfo.name}</strong><br><small style="color:var(--text3)">₹${s.workerInfo.dailyWage}/day</small></td>
+                <td><span class="cat-badge cat-${s.workerInfo.category.toLowerCase()}">${s.workerInfo.category}</span></td>
+                <td>${s.daysPresent} Present ${s.daysHalf > 0 ? `, ${s.daysHalf} Half` : ''}</td>
+                <td>${s.totalOvertime}</td>
+                <td><strong class="worker-row-wages">₹${fmtMoney(s.totalWages)}</strong></td>
+            </tr>
+        `).join('');
+
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to load attendance report', 'error');
+    }
+}
+
+// === WORKER MANAGEMENT ===
+async function loadWorkers() {
+    try {
+        const res = await apiFetch('/attendance');
+        const workers = await res.json();
+        const body = document.getElementById('workerListBody');
+        body.innerHTML = workers.map(w => `
+            <tr>
+                <td><strong>${w.name}</strong><br><small>${w.phone || ''}</small></td>
+                <td>${w.category}</td>
+                <td>₹${w.dailyWage}</td>
+                <td>
+                    <button class="btn-icon delete" onclick="deleteWorker('${w._id}')">🗑️</button>
+                </td>
+            </tr>
+        `).join('');
+    } catch { }
+}
+
+document.getElementById('workerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        name: document.getElementById('workerName').value,
+        dailyWage: parseFloat(document.getElementById('workerWage').value),
+        phone: document.getElementById('workerPhone').value,
+        category: document.getElementById('workerCat').value
+    };
+    try {
+        const res = await apiFetch('/attendance', 'POST', payload);
+        if (res.ok) {
+            showToast('Worker added successfully', 'success');
+            document.getElementById('workerForm').reset();
+            loadWorkers();
+        }
+    } catch { showToast('Error saving worker', 'error'); }
+});
+
+async function deleteWorker(id) {
+    if (!confirm('Are you sure you want to remove this worker?')) return;
+    try {
+        const res = await apiFetch(`/attendance/${id}`, 'DELETE');
+        if (res.ok) {
+            showToast('Worker removed');
+            loadWorkers();
+            loadAttendanceReport();
+        }
+    } catch { }
+}
+
+// === ATTENDANCE LOGGING ===
+async function openAttendanceLogger() {
+    const res = await apiFetch('/attendance');
+    const workers = await res.json();
+    if (workers.length === 0) {
+        showToast('Please add workers first', 'warning');
+        openModal('workerModal');
+        return;
+    }
+
+    document.getElementById('attLogDate').value = new Date().toISOString().split('T')[0];
+    const body = document.getElementById('attLogBody');
+    body.innerHTML = workers.map(w => `
+        <tr data-worker-id="${w._id}">
+            <td><strong>${w.name}</strong><br><small>₹${w.dailyWage}/day</small></td>
+            <td>
+                <select class="att-status-select" required>
+                    <option value="Present">Present</option>
+                    <option value="Half-Day">Half-Day</option>
+                    <option value="Absent">Absent</option>
+                </select>
+            </td>
+            <td>
+                <input type="number" class="att-ot-input" value="0" min="0" step="0.5" style="max-width:80px" />
+            </td>
+        </tr>
+    `).join('');
+    openModal('attendanceLoggerModal');
+}
+
+document.getElementById('attendanceLoggerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const date = document.getElementById('attLogDate').value;
+    const entries = [];
+    document.querySelectorAll('#attLogBody tr').forEach(tr => {
+        entries.push({
+            workerId: tr.dataset.workerId,
+            status: tr.querySelector('.att-status-select').value,
+            overtimeHours: parseFloat(tr.querySelector('.att-ot-input').value) || 0
+        });
+    });
+
+    try {
+        const res = await apiFetch('/attendance/bulk', 'POST', { date, entries });
+        if (res.ok) {
+            showToast('Attendance records saved', 'success');
+            closeModal('attendanceLoggerModal');
+            loadAttendanceReport();
+        }
+    } catch { showToast('Error saving attendance', 'error'); }
+}
+

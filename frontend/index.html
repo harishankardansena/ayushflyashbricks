@@ -88,6 +88,9 @@
         <a href="#" class="nav-item" data-page="billing" onclick="navigateTo('billing')">
           <span class="nav-icon">🧾</span><span class="nav-label">Billing</span>
         </a>
+        <a href="#" class="nav-item" data-page="attendance" onclick="navigateTo('attendance')">
+          <span class="nav-icon">👥</span><span class="nav-label">Attendance</span>
+        </a>
         <a href="#" class="nav-item" data-page="reports" onclick="navigateTo('reports')">
           <span class="nav-icon">📥</span><span class="nav-label">Reports</span>
         </a>
@@ -309,6 +312,41 @@
               <tbody id="billingBody"></tbody>
             </table>
             <div class="pagination" id="billPagination"></div>
+          </div>
+        </div>
+
+        <!-- ATTENDANCE -->
+        <div id="page-attendance" class="page hidden">
+          <div class="page-header">
+            <h2>Attendance & Wages</h2>
+            <p>Track workers, daily attendance, and auto-calculate wages</p>
+            <div class="header-btns">
+              <button class="btn-secondary" onclick="openModal('workerModal')">👥 Manage Workers</button>
+              <button class="btn-primary" onclick="openAttendanceLogger()">📝 Log Attendance</button>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <div class="toggle-group">
+                <button id="btnWeekly" class="toggle-btn active" onclick="switchAttView('weekly')">Weekly</button>
+                <button id="btnMonthly" class="toggle-btn" onclick="switchAttView('monthly')">Monthly</button>
+            </div>
+            <select id="attMonth" onchange="loadAttendanceReport()" class="hidden"><option value="">Month</option></select>
+            <select id="attYear" onchange="loadAttendanceReport()" class="hidden"><option value="">Year</option></select>
+            <div id="weeklyDateRange" class="date-range-info"></div>
+          </div>
+
+          <div class="attendance-summary" id="attendanceSummaryGrid"></div>
+
+          <div class="table-card">
+            <table class="data-table">
+              <thead>
+                <tr id="attTableHead">
+                  <!-- Dynamic headers based on view -->
+                </tr>
+              </thead>
+              <tbody id="attTableBody"></tbody>
+            </table>
           </div>
         </div>
 
@@ -658,6 +696,86 @@
         <button class="btn-secondary" onclick="closeModal('billViewModal')">Close</button>
         <button class="btn-primary" onclick="printBill()">🖨️ Print Bill</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Worker Modal -->
+  <div class="modal-overlay hidden" id="workerModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Manage Workers</h3>
+        <button onclick="closeModal('workerModal')">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem;">
+        <form id="workerForm" style="padding:0; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
+            <input type="hidden" id="workerEditId" />
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Worker Name *</label>
+                    <input type="text" id="workerName" placeholder="Enter Full Name" required />
+                </div>
+                <div class="form-group">
+                    <label>Daily Wage (₹) *</label>
+                    <input type="number" id="workerWage" placeholder="e.g. 500" required />
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="workerPhone" placeholder="Mobile number" />
+                </div>
+                <div class="form-group">
+                    <label>Category</label>
+                    <select id="workerCat">
+                        <option>Labour</option>
+                        <option>Driver</option>
+                        <option>Operator</option>
+                        <option>Supervisor</option>
+                        <option>Other</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn-primary" style="margin-top: 0.5rem;">Save Worker</button>
+        </form>
+        
+        <div style="font-weight: 600; margin-bottom: 0.5rem;">Active Workers List</div>
+        <div class="table-card" style="max-height: 300px; overflow-y: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr><th>Name</th><th>Category</th><th>Wage</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="workerListBody"></tbody>
+            </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attendance Logger Modal -->
+  <div class="modal-overlay hidden" id="attendanceLoggerModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Log Daily Attendance</h3>
+        <button onclick="closeModal('attendanceLoggerModal')">✕</button>
+      </div>
+      <form id="attendanceLoggerForm">
+        <div class="form-group" style="max-width: 200px; margin-bottom: 1rem;">
+            <label>Select Date</label>
+            <input type="date" id="attLogDate" required />
+        </div>
+        <div class="table-card" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;">
+            <table class="data-table">
+                <thead>
+                    <tr><th>Worker</th><th>Status</th><th>Overtime (Hrs)</th></tr>
+                </thead>
+                <tbody id="attLogBody"></tbody>
+            </table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('attendanceLoggerModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Save All Records</button>
+        </div>
+      </form>
     </div>
   </div>
 
