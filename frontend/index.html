@@ -326,20 +326,33 @@
             </div>
           </div>
 
-          <div class="filter-bar">
+          <div class="filter-bar" style="align-items:center; flex-wrap:wrap; gap:0.75rem;">
             <div class="toggle-group">
                 <button id="btnWeekly" class="toggle-btn active" onclick="switchAttView('weekly')">Weekly</button>
                 <button id="btnMonthly" class="toggle-btn" onclick="switchAttView('monthly')">Monthly</button>
             </div>
+
+            <!-- Weekly navigation -->
+            <div id="weeklyNav" style="display:flex; align-items:center; gap:0.5rem;">
+              <button class="page-btn" onclick="shiftWeek(-1)" title="Previous Week">&#8592; Prev</button>
+              <div id="weeklyDateRange" class="date-range-info" style="min-width:180px; text-align:center;"></div>
+              <button class="page-btn" onclick="shiftWeek(1)" title="Next Week">Next &#8594;</button>
+            </div>
+
+            <!-- Monthly selects -->
             <select id="attMonth" onchange="loadAttendanceReport()" class="hidden"><option value="">Month</option></select>
             <select id="attYear" onchange="loadAttendanceReport()" class="hidden"><option value="">Year</option></select>
-            <div id="weeklyDateRange" class="date-range-info"></div>
+            
+            <!-- Download Button -->
+            <button class="btn-secondary" onclick="exportAttendance()" style="margin-left:auto; display:flex; align-items:center; gap:0.5rem; padding:0.5rem 1rem;">
+              <span>📥 Export Excel</span>
+            </button>
           </div>
 
           <div class="attendance-summary" id="attendanceSummaryGrid"></div>
 
-          <div class="table-card">
-            <table class="data-table">
+          <div class="table-card" id="attTableContainer" style="overflow-x: auto;">
+            <table class="data-table" style="min-width: max-content;">
               <thead>
                 <tr id="attTableHead">
                   <!-- Dynamic headers based on view -->
@@ -348,6 +361,10 @@
               <tbody id="attTableBody"></tbody>
             </table>
           </div>
+
+          <!-- Monthly calendar cards (one per worker) -->
+          <div id="attCalendarView" class="hidden"></div>
+
         </div>
 
         <!-- REPORTS -->

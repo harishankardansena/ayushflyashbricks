@@ -35,7 +35,7 @@ function updateTopbarDate() {
 
 function populateYearSelects() {
   const year = new Date().getFullYear();
-  const selects = ['prodYear', 'expYear', 'billYear', 'reportYear', 'usageYear'];
+  const selects = ['prodYear', 'expYear', 'billYear', 'reportYear', 'usageYear', 'attYear'];
   selects.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -78,6 +78,8 @@ function setCurrentMonthFilters() {
     const el = document.getElementById(id);
     if (el) el.value = y;
   });
+  const attYearEl = document.getElementById('attYear');
+  if (attYearEl) attYearEl.value = y;
   // Report defaults
   const rm = document.getElementById('reportMonth');
   if (rm) rm.value = m;
@@ -1151,77 +1153,129 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 // Close notification panel on outside click
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('notifPanel');
+  const bell = document.getElementById('notifBell');
+  if (!panel.classList.contains('hidden') && !bell.contains(e.target) && !panel.contains(e.target)) {
+    panel.classList.add('hidden');
+  }
 });
 
 // ============================================================
 // ATTENDANCE & PERSONNEL
 // ============================================================
 let attendanceView = 'weekly'; // 'weekly' or 'monthly'
+let weekOffset = 0; // 0 = current week, -1 = last week, +1 = next week
 
 async function loadAttendance() {
+    weekOffset = 0;
     switchAttView(attendanceView);
+}
+
+function shiftWeek(dir) {
+    weekOffset += dir;
+    loadAttendanceReport();
 }
 
 function switchAttView(view) {
     attendanceView = view;
-    const btnW = document.getElementById('btnWeekly');
-    const btnM = document.getElementById('btnMonthly');
+    document.getElementById('btnWeekly').classList.toggle('active', view === 'weekly');
+    document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
+
+    const weeklyNav = document.getElementById('weeklyNav');
     const monSel = document.getElementById('attMonth');
-    const yrSel = document.getElementById('attYear');
-    const rangeInfo = document.getElementById('weeklyDateRange');
+    const yrSel  = document.getElementById('attYear');
 
     if (view === 'weekly') {
-        btnW.classList.add('active');
-        btnM.classList.remove('active');
+        weeklyNav.style.display = 'flex';
         monSel.classList.add('hidden');
         yrSel.classList.add('hidden');
-        rangeInfo.classList.remove('hidden');
     } else {
-        btnW.classList.remove('active');
-        btnM.classList.add('active');
+        weeklyNav.style.display = 'none';
         monSel.classList.remove('hidden');
         yrSel.classList.remove('hidden');
-        rangeInfo.classList.add('hidden');
     }
     loadAttendanceReport();
 }
 
 async function loadAttendanceReport() {
-    const month = document.getElementById('attMonth').value;
-    const year = document.getElementById('attYear').value;
-    
-    let start, end;
+    const month    = document.getElementById('attMonth').value;
+    const year     = document.getElementById('attYear').value;
+    const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+    let start, end, dates = [];
+
     if (attendanceView === 'weekly') {
         const today = new Date();
-        // Start of current week (Monday)
-        const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)));
-        startOfWeek.setHours(0,0,0,0);
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23,59,59,999);
-        start = startOfWeek.toISOString();
-        end = endOfWeek.toISOString();
-        document.getElementById('weeklyDateRange').textContent = `${formatDate(start)} to ${formatDate(end)}`;
+        const dow = today.getDay(); // 0=Sun
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + (weekOffset * 7));
+        monday.setHours(0,0,0,0);
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            dates.push(d);
+        }
+        start = dates[0].toISOString();
+        const endD = new Date(dates[6]); endD.setHours(23,59,59,999);
+        end = endD.toISOString();
+        document.getElementById('weeklyDateRange').textContent =
+            `${formatDate(start)} — ${formatDate(end)}`;
     } else {
-        start = new Date(year, month - 1, 1).toISOString();
-        end = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
+        const y = parseInt(year) || new Date().getFullYear();
+        const m = parseInt(month) || new Date().getMonth() + 1;
+        const firstDay = new Date(y, m - 1, 1);
+        const lastDay  = new Date(y, m, 0);
+        for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+            dates.push(new Date(d));
+        }
+        start = firstDay.toISOString();
+        const endD = new Date(lastDay); endD.setHours(23,59,59,999);
+        end = endD.toISOString();
     }
 
     try {
-        const statsRes = await apiFetch(`/attendance/stats?start=${start}&end=${end}`);
-        const stats = await statsRes.json();
-        
-        // Summary Cards
-        const totalWages = stats.reduce((s, r) => s + r.totalWages, 0);
-        const totalOT = stats.reduce((s, r) => s + r.totalOvertime, 0);
+        const [reportRes, workersRes, statsRes] = await Promise.all([
+            apiFetch(`/attendance/report?start=${start}&end=${end}`),
+            apiFetch('/attendance'),
+            apiFetch(`/attendance/stats?start=${start}&end=${end}`)
+        ]);
+
+        // Safe-parse: fallback to [] if any response is not ok or not an array
+        const parseArr = async (res) => {
+            if (!res.ok) return [];
+            try { const d = await res.json(); return Array.isArray(d) ? d : []; }
+            catch { return []; }
+        };
+        const records = await parseArr(reportRes);
+        const workers = await parseArr(workersRes);
+        const stats   = await parseArr(statsRes);
+
+        // Build lookup: workerId -> dateStr -> status
+        const lookup = {};
+        records.forEach(r => {
+            if (!r.worker) return; // skip orphaned records (deleted worker)
+            const wid = (r.worker._id || r.worker).toString();
+            const ds  = new Date(r.date).toDateString();
+            if (!lookup[wid]) lookup[wid] = {};
+            lookup[wid][ds] = r.status;
+        });
+
+        // Stats map for wages
+        const statsMap = {};
+        stats.forEach(s => { statsMap[s._id.toString()] = s; });
+
+        // Summary
+        const totalWages = stats.reduce((a, s) => a + s.totalWages, 0);
+        const totalOT    = stats.reduce((a, s) => a + s.totalOvertime, 0);
         document.getElementById('attendanceSummaryGrid').innerHTML = `
             <div class="att-sum-card">
                 <div class="att-sum-label">TOTAL WORKERS</div>
-                <div class="att-sum-value">${stats.length}</div>
+                <div class="att-sum-value">${workers.length}</div>
             </div>
             <div class="att-sum-card">
                 <div class="att-sum-label">ESTIMATED WAGES</div>
-                <div class="att-sum-value">₹${fmtMoney(totalWages)}</div>
+                <div class="att-sum-value" style="color:var(--success)">₹${fmtMoney(totalWages)}</div>
             </div>
             <div class="att-sum-card">
                 <div class="att-sum-label">TOTAL OVERTIME</div>
@@ -1229,32 +1283,194 @@ async function loadAttendanceReport() {
             </div>
         `;
 
-        // Table Headers
-        const head = document.getElementById('attTableHead');
-        head.innerHTML = `<th>Worker Detail</th><th>Category</th><th>Presence</th><th>OT (Hrs)</th><th>Total Wage (₹)</th>`;
-
-        // Table Body
-        const body = document.getElementById('attTableBody');
-        if (stats.length === 0) {
-            body.innerHTML = '<tr><td colspan="5"><div class="empty-state">No attendance records for this period</div></td></tr>';
+        if (workers.length === 0) {
+            document.getElementById('attTableContainer').classList.add('hidden');
+            document.getElementById('attCalendarView').classList.remove('hidden');
+            document.getElementById('attCalendarView').innerHTML = '<div class="empty-state">No workers added yet.</div>';
             return;
         }
 
-        body.innerHTML = stats.map(s => `
-            <tr>
-                <td><strong>${s.workerInfo.name}</strong><br><small style="color:var(--text3)">₹${s.workerInfo.dailyWage}/day</small></td>
-                <td><span class="cat-badge cat-${s.workerInfo.category.toLowerCase()}">${s.workerInfo.category}</span></td>
-                <td>${s.daysPresent} Present ${s.daysHalf > 0 ? `, ${s.daysHalf} Half` : ''}</td>
-                <td>${s.totalOvertime}</td>
-                <td><strong class="worker-row-wages">₹${fmtMoney(s.totalWages)}</strong></td>
-            </tr>
-        `).join('');
+        // ── WEEKLY: 1×7 block matrix ──────────────────────────────
+        if (attendanceView === 'weekly') {
+            document.getElementById('attTableContainer').classList.remove('hidden');
+            document.getElementById('attCalendarView').classList.add('hidden');
+
+            document.getElementById('attTableHead').innerHTML =
+                `<th style="min-width:150px">Worker</th>` +
+                dates.map(d => `<th class="att-day-cell">${dayNames[(d.getDay()+6)%7]}<br><small>${d.getDate()}</small></th>`).join('') +
+                `<th>Total Wage</th>`;
+
+            document.getElementById('attTableBody').innerHTML = workers.map(w => {
+                const wid = w._id.toString();
+                const cells = dates.map(d => {
+                    const status = lookup[wid]?.[d.toDateString()];
+                    return cellBlock(status, d);
+                }).join('');
+                const ws = statsMap[wid];
+                return `<tr>
+                    <td><strong>${w.name}</strong><br><small style="color:var(--text3)">${w.category} · ₹${w.dailyWage}/d</small></td>
+                    ${cells}
+                    <td><strong style="color:var(--success)">₹${fmtMoney(ws?.totalWages || 0)}</strong></td>
+                </tr>`;
+            }).join('');
+        }
+
+        // ── MONTHLY: Calendar card per worker ─────────────────────
+        else {
+            document.getElementById('attTableContainer').classList.add('hidden');
+            document.getElementById('attCalendarView').classList.remove('hidden');
+
+            const firstDow  = (dates[0].getDay() + 6) % 7; // Mon=0..Sun=6
+            const totalCells = firstDow + dates.length;
+            const numWeeks   = Math.ceil(totalCells / 7);
+            const todayStr   = new Date().toDateString();
+
+            const calHTML = workers.map(w => {
+                const wid = w._id.toString();
+                const ws  = statsMap[wid];
+
+                // Build week rows
+                let rows = '';
+                for (let week = 0; week < numWeeks; week++) {
+                    let cells = '';
+                    for (let day = 0; day < 7; day++) {
+                        const pos      = week * 7 + day;
+                        const dateIdx  = pos - firstDow;
+
+                        if (dateIdx < 0 || dateIdx >= dates.length) {
+                            cells += `<td class="att-cal-cell empty"></td>`;
+                        } else {
+                            const d       = dates[dateIdx];
+                            const status  = lookup[wid]?.[d.toDateString()];
+                            const isToday = d.toDateString() === todayStr;
+                            const isFuture= d > new Date() && !isToday;
+
+                            let cls = 'att-cal-cell';
+                            if (status === 'Present')  cls += ' att-present';
+                            else if (status === 'Absent')   cls += ' att-absent';
+                            else if (status === 'Half-Day') cls += ' att-half';
+                            else cls += ' att-norecord';
+                            if (isToday)  cls += ' att-today';
+                            if (isFuture) cls += ' att-future';
+
+                            const statusLabel = status === 'Half-Day' ? 'Half' : (status || '');
+                            cells += `<td class="${cls}" title="${statusLabel || 'No record'} · ${d.toLocaleDateString('en-IN')}">
+                                <div class="att-date-num">${d.getDate()}</div>
+                                ${statusLabel ? `<div class="att-status-label">${statusLabel}</div>` : ''}
+                            </td>`;
+                        }
+                    }
+                    rows += `<tr>
+                        <td class="week-label">Week ${week + 1}</td>
+                        ${cells}
+                    </tr>`;
+                }
+
+                return `<div class="worker-cal-card">
+                    <div class="worker-cal-header">
+                        <div style="display:flex;align-items:center;gap:0.75rem;">
+                            <strong style="font-size:1rem">${w.name}</strong>
+                            <span class="cat-badge cat-${w.category.toLowerCase()}">${w.category}</span>
+                            <small style="color:var(--text3)">₹${w.dailyWage}/day</small>
+                        </div>
+                        <div style="font-weight:700;color:var(--success);font-size:1rem">
+                            Total Wages: ₹${fmtMoney(ws?.totalWages || 0)}
+                        </div>
+                    </div>
+                    <div style="overflow-x:auto;">
+                    <table class="att-cal-table">
+                        <thead>
+                            <tr>
+                                <th style="min-width:60px;text-align:left;padding-left:0.875rem;"></th>
+                                ${dayNames.map(d => `<th>${d}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                    </div>
+                </div>`;
+            }).join('');
+
+            document.getElementById('attCalendarView').innerHTML = calHTML || '<div class="empty-state">No attendance records for this month.</div>';
+        }
 
     } catch (err) {
         console.error(err);
         showToast('Failed to load attendance report', 'error');
     }
 }
+
+async function exportAttendance() {
+    const month = document.getElementById('attMonth').value;
+    const year  = document.getElementById('attYear').value;
+    let start, end;
+
+    if (attendanceView === 'weekly') {
+        const today = new Date();
+        const dow = today.getDay();
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + (weekOffset * 7));
+        monday.setHours(0,0,0,0);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+        sunday.setHours(23,59,59,999);
+        start = monday.toISOString();
+        end = sunday.toISOString();
+    } else {
+        const y = parseInt(year) || new Date().getFullYear();
+        const m = parseInt(month) || new Date().getMonth() + 1;
+        const firstDay = new Date(y, m - 1, 1);
+        const lastDay  = new Date(y, m, 0);
+        lastDay.setHours(23,59,59,999);
+        start = firstDay.toISOString();
+        end = lastDay.toISOString();
+    }
+
+    try {
+        showToast('Generating Excel report...', 'info');
+        const res = await apiFetch(`/attendance/excel?start=${start}&end=${end}`);
+        if (!res.ok) throw new Error('Export failed');
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const rangeStr = attendanceView === 'weekly' ? 'Weekly' : 'Monthly';
+        a.download = `Attendance_Report_${rangeStr}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        showToast('Excel report downloaded!', 'success');
+    } catch (err) {
+        console.error(err);
+        showToast('Failed to export Excel report', 'error');
+    }
+}
+
+// Helper: renders a single attendance block cell
+function cellBlock(status, dateObj, showDate = false) {
+    const today    = new Date().toDateString();
+    const isFuture = dateObj > new Date() && dateObj.toDateString() !== today;
+    let bg = 'var(--surface3)', color = 'var(--text3)', title = 'No record';
+    if (status === 'Present')  { bg = 'rgba(16,185,129,0.3)'; color = 'var(--success)'; title = 'Present'; }
+    if (status === 'Absent')   { bg = 'rgba(239,68,68,0.3)';  color = 'var(--danger)';  title = 'Absent'; }
+    if (status === 'Half-Day') { bg = 'rgba(245,158,11,0.3)'; color = 'var(--warning)'; title = 'Half-Day'; }
+    if (isFuture) { bg = 'transparent'; color = 'var(--surface3)'; title = ''; }
+    const todayOutline = dateObj.toDateString() === today ? 'box-shadow:0 0 0 2px var(--primary);' : '';
+    
+    // Weekly block: show P/A/H label
+    // Monthly block: show date number with color-coded background
+    const inner = showDate
+        ? `<div style="font-size:0.65rem;font-weight:800;line-height:1">${dateObj.getDate()}</div>
+           <div style="font-size:0.6rem;font-weight:600;opacity:0.85">${status ? status[0] : ''}</div>`
+        : `<div style="font-size:0.75rem;font-weight:800">${status ? status[0] : '–'}</div>`;
+
+    return `<td class="att-day-cell" title="${title}${title ? ' · ' : ''}${dateObj.toLocaleDateString('en-IN')}">
+        <div style="width:${showDate?40:32}px;height:${showDate?40:32}px;border-radius:8px;background:${bg};color:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;margin:auto;${todayOutline}">${inner}</div>
+    </td>`;
+}
+
 
 // === WORKER MANAGEMENT ===
 async function loadWorkers() {
@@ -1294,15 +1510,18 @@ document.getElementById('workerForm').addEventListener('submit', async (e) => {
 });
 
 async function deleteWorker(id) {
-    if (!confirm('Are you sure you want to remove this worker?')) return;
+    if (!confirm('Are you sure you want to remove this worker?\n\nTheir attendance records will be preserved in the database but they will no longer appear in future reports.')) return;
     try {
-        const res = await apiFetch(`/attendance/${id}`, 'DELETE');
+        const res = await apiFetch(`/attendance/worker/${id}`, 'DELETE');
         if (res.ok) {
-            showToast('Worker removed');
+            showToast('Worker removed from active list', 'success');
             loadWorkers();
             loadAttendanceReport();
+        } else {
+            const d = await res.json();
+            showToast(d.message || 'Failed to remove worker', 'error');
         }
-    } catch { }
+    } catch { showToast('Server error', 'error'); }
 }
 
 // === ATTENDANCE LOGGING ===
@@ -1355,5 +1574,5 @@ document.getElementById('attendanceLoggerForm').addEventListener('submit', async
             loadAttendanceReport();
         }
     } catch { showToast('Error saving attendance', 'error'); }
-}
+});
 

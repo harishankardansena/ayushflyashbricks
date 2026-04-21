@@ -6,6 +6,8 @@ const Production = require('../models/Production');
 const Inventory = require('../models/Inventory');
 const Expense = require('../models/Expense');
 const Billing = require('../models/Billing');
+const Worker = require('../models/Worker');
+const Attendance = require('../models/Attendance');
 
 // GET /api/reports/excel?month=4&year=2026
 router.get('/excel', auth, async (req, res) => {
@@ -29,7 +31,7 @@ router.get('/excel', auth, async (req, res) => {
       'Current Stock': p.currentStock,
       'Notes': p.notes || ''
     }));
-    if (prodData.length === 0) prodData.push({ 'Date': 'No records', 'Previous Stock': 0, 'Produced': 0, 'Sold': 0, 'Current Stock': 0, 'Notes': '' });
+    if (prodData.length === 0) prodData.push({ 'Date': 'No records' });
     const prodSheet = XLSX.utils.json_to_sheet(prodData);
     prodSheet['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(workbook, prodSheet, 'Production');
@@ -50,7 +52,45 @@ router.get('/excel', auth, async (req, res) => {
     invSheet['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 8 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(workbook, invSheet, 'Inventory');
 
-    // === Sheet 3: Expenses ===
+    // === Sheet 3: Attendance ===
+    const workers = await Worker.find({ isActive: true }).sort({ name: 1 });
+    const attRecords = await Attendance.find({ date: { $gte: start, $lte: end } });
+    const attStats = await Attendance.aggregate([
+      { $match: { date: { $gte: start, $lte: end } } },
+      { $group: { _id: '$worker', totalWages: { $sum: '$wageEarned' } } }
+    ]);
+    const attStatsMap = {};
+    attStats.forEach(s => { attStatsMap[s._id.toString()] = s.totalWages; });
+
+    const lookup = {};
+    attRecords.forEach(r => {
+      const wid = r.worker.toString();
+      const ds = new Date(r.date).toDateString();
+      if (!lookup[wid]) lookup[wid] = {};
+      lookup[wid][ds] = r.status;
+    });
+
+    const dates = [];
+    let curr = new Date(start);
+    while (curr <= end) { dates.push(new Date(curr)); curr.setDate(curr.getDate() + 1); }
+
+    const attExcelData = workers.map(w => {
+      const row = { 'Worker Name': w.name, 'Category': w.category, 'Daily Wage': w.dailyWage };
+      dates.forEach(d => {
+        const header = `${d.getDate()}/${d.getMonth() + 1}`;
+        const status = lookup[w._id.toString()]?.[d.toDateString()] || '-';
+        row[header] = status === 'Present' ? 'P' : status === 'Half-Day' ? 'H' : status === 'Absent' ? 'A' : '-';
+      });
+      row['Total Wage (₹)'] = attStatsMap[w._id.toString()] || 0;
+      return row;
+    });
+    const totalWageExp = attStats.reduce((sum, s) => sum + s.totalWages, 0);
+    if (attExcelData.length === 0) attExcelData.push({ 'Worker Name': 'No records' });
+    const attSheet = XLSX.utils.json_to_sheet(attExcelData);
+    attSheet['!cols'] = [{ wch: 18 }, { wch: 12 }, { wch: 10 }, ...dates.map(() => ({ wch: 6 })), { wch: 15 }];
+    XLSX.utils.book_append_sheet(workbook, attSheet, 'Attendance');
+
+    // === Sheet 4: Expenses ===
     const expenses = await Expense.find({ date: { $gte: start, $lte: end } }).sort({ date: 1 });
     const expData = expenses.map(e => ({
       'Date': new Date(e.date).toLocaleDateString('en-IN'),
@@ -66,7 +106,7 @@ router.get('/excel', auth, async (req, res) => {
     expSheet['!cols'] = [{ wch: 14 }, { wch: 15 }, { wch: 30 }, { wch: 14 }, { wch: 14 }];
     XLSX.utils.book_append_sheet(workbook, expSheet, 'Expenses');
 
-    // === Sheet 3b: Inventory Usage ===
+    // === Sheet 5: Inventory Usage ===
     const InventoryUsage = require('../models/InventoryUsage');
     const usages = await InventoryUsage.find({ date: { $gte: start, $lte: end } }).sort({ date: 1 });
     const usageData = usages.map(u => ({
@@ -83,7 +123,7 @@ router.get('/excel', auth, async (req, res) => {
     usageSheet['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 30 }, { wch: 16 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(workbook, usageSheet, 'Inventory Usage');
 
-    // === Sheet 4: Billing / Sales ===
+    // === Sheet 6: Billing / Sales ===
     const bills = await Billing.find({ date: { $gte: start, $lte: end } }).sort({ date: 1 });
     const billData = bills.map(b => ({
       'Bill No': b.billNumber,
@@ -111,26 +151,27 @@ router.get('/excel', auth, async (req, res) => {
     billSheet['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 25 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(workbook, billSheet, 'Billing');
 
-    // === Sheet 5: Summary ===
+    // === Sheet 7: Summary ===
     const totalProd = productions.reduce((sum, p) => sum + p.produced, 0);
     const totalSold = productions.reduce((sum, p) => sum + p.sold, 0);
+    const mainExpenses = totalExp;
     const summaryData = [
       { 'Metric': 'Month', 'Value': `${monthName} ${year}` },
       { 'Metric': 'Total Bricks Produced', 'Value': totalProd },
       { 'Metric': 'Total Bricks Sold', 'Value': totalSold },
-      { 'Metric': 'Current Stock', 'Value': productions.length > 0 ? productions[productions.length - 1].currentStock : 0 },
+      { 'Metric': 'Current Brick Stock', 'Value': productions.length > 0 ? productions[productions.length - 1].currentStock : 0 },
       { 'Metric': 'Total Revenue (₹)', 'Value': totalRev },
-      { 'Metric': 'Total Expenses (₹)', 'Value': totalExp },
-      { 'Metric': 'Net Profit (₹)', 'Value': totalRev - totalExp },
+      { 'Metric': 'Total Expenses (₹)', 'Value': mainExpenses },
+      { 'Metric': 'NET PROFIT (₹)', 'Value': totalRev - mainExpenses },
       { 'Metric': 'Total Bills Raised', 'Value': bills.length },
     ];
     const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-    summarySheet['!cols'] = [{ wch: 25 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+    summarySheet['!cols'] = [{ wch: 30 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Monthly Summary');
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-    res.setHeader('Content-Disposition', `attachment; filename="FlyAshBricks_Report_${monthName}_${year}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="FlyAshBricks_FullReport_${monthName}_${year}.xlsx"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
   } catch (err) {
@@ -140,3 +181,4 @@ router.get('/excel', auth, async (req, res) => {
 });
 
 module.exports = router;
+

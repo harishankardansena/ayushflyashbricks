@@ -818,3 +818,94 @@ body {
 .cat-driver { color: #f472b6; }
 .cat-operator { color: #2dd4bf; }
 .cat-supervisor { color: #fbbf24; }
+
+/* ===== WORKER CALENDAR CARD (Monthly View) ===== */
+#attCalendarView { display: flex; flex-direction: column; gap: 1.5rem; }
+
+.worker-cal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.worker-cal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.875rem 1.25rem;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.att-cal-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.att-cal-table thead th {
+  padding: 0.6rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text3);
+  text-align: center;
+  border-bottom: 1px solid var(--border2);
+  background: var(--surface2);
+}
+
+.att-cal-table .week-label {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text3);
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+  background: var(--surface2);
+  text-align: left;
+}
+
+.att-cal-cell {
+  padding: 0.25rem;
+  text-align: center;
+  border: 1px solid var(--border);
+  min-width: 52px;
+  height: 52px;
+  vertical-align: middle;
+  transition: background var(--transition);
+}
+
+.att-cal-cell.empty { background: transparent; border-color: transparent; }
+
+.att-date-num {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.att-status-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+.att-cal-cell.att-present  { background: rgba(16,185,129,0.18); }
+.att-cal-cell.att-present .att-date-num { color: var(--success); }
+.att-cal-cell.att-present .att-status-label { color: var(--success); }
+
+.att-cal-cell.att-absent  { background: rgba(239,68,68,0.15); }
+.att-cal-cell.att-absent .att-date-num { color: var(--danger); }
+.att-cal-cell.att-absent .att-status-label { color: var(--danger); }
+
+.att-cal-cell.att-half  { background: rgba(245,158,11,0.18); }
+.att-cal-cell.att-half .att-date-num { color: var(--warning); }
+.att-cal-cell.att-half .att-status-label { color: var(--warning); }
+
+.att-cal-cell.att-today { box-shadow: inset 0 0 0 2px var(--primary); border-radius: 6px; }
+.att-cal-cell.att-today .att-date-num { color: var(--primary); }
+.att-cal-cell.att-future { opacity: 0.3; }
+.att-cal-cell.att-norecord .att-date-num { color: var(--text3); }
+
