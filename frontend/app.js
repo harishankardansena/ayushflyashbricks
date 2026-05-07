@@ -1563,7 +1563,8 @@ async function openAttendanceLogger() {
         <tr data-worker-id="${w._id}">
             <td><strong>${w.name}</strong><br><small>₹${w.dailyWage}/day</small></td>
             <td>
-                <select class="att-status-select" required>
+                <select class="att-status-select">
+                    <option value="">-- Select --</option>
                     <option value="Present">Present</option>
                     <option value="Half-Day">Half-Day</option>
                     <option value="Absent">Absent</option>
@@ -1585,12 +1586,20 @@ document.getElementById('attendanceLoggerForm').addEventListener('submit', async
     const date = document.getElementById('attLogDate').value;
     const entries = [];
     document.querySelectorAll('#attLogBody tr').forEach(tr => {
-        entries.push({
-            workerId: tr.dataset.workerId,
-            status: tr.querySelector('.att-status-select').value,
-            overtimeHours: parseFloat(tr.querySelector('.att-ot-input').value) || 0,
-            advancePayment: parseFloat(tr.querySelector('.att-advance-input').value) || 0
-        });
+        const status = tr.querySelector('.att-status-select').value;
+        const advance = parseFloat(tr.querySelector('.att-advance-input').value) || 0;
+        const ot = parseFloat(tr.querySelector('.att-ot-input').value) || 0;
+        
+        // If status is empty but they took an advance, maybe log it as Absent with advance? 
+        // Best to just require a status if logging, or skip if completely empty
+        if (status !== '' || advance > 0) {
+            entries.push({
+                workerId: tr.dataset.workerId,
+                status: status || 'Absent', // default to Absent if just logging advance
+                overtimeHours: ot,
+                advancePayment: advance
+            });
+        }
     });
 
     try {
