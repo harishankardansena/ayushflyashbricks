@@ -1298,6 +1298,7 @@ async function loadAttendanceReport() {
             document.getElementById('attTableHead').innerHTML =
                 `<th style="min-width:150px">Worker</th>` +
                 dates.map(d => `<th class="att-day-cell">${dayNames[d.getDay()]}<br><small>${d.getDate()}</small></th>`).join('') +
+                `<th>Total Advance</th>` +
                 `<th>Total Wage</th>`;
 
             document.getElementById('attTableBody').innerHTML = workers.map(w => {
@@ -1310,6 +1311,7 @@ async function loadAttendanceReport() {
                 return `<tr>
                     <td><strong>${w.name}</strong><br><small style="color:var(--text3)">${w.category} · ₹${w.dailyWage}/d</small></td>
                     ${cells}
+                    <td><strong style="color:var(--danger)">₹${fmtMoney(ws?.totalAdvance || 0)}</strong></td>
                     <td><strong style="color:var(--success)">₹${fmtMoney(ws?.totalWages || 0)}</strong></td>
                 </tr>`;
             }).join('');
@@ -1372,6 +1374,9 @@ async function loadAttendanceReport() {
                             <strong style="font-size:1rem">${w.name}</strong>
                             <span class="cat-badge cat-${w.category.toLowerCase()}">${w.category}</span>
                             <small style="color:var(--text3)">₹${w.dailyWage}/day</small>
+                        </div>
+                        <div style="font-weight:700;color:var(--danger);font-size:1rem">
+                            Advance: ₹${fmtMoney(ws?.totalAdvance || 0)}
                         </div>
                         <div style="font-weight:700;color:var(--success);font-size:1rem">
                             Total Wages: ₹${fmtMoney(ws?.totalWages || 0)}
