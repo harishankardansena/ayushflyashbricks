@@ -1201,19 +1201,19 @@ function switchAttView(view) {
 async function loadAttendanceReport() {
     const month    = document.getElementById('attMonth').value;
     const year     = document.getElementById('attYear').value;
-    const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
     let start, end, dates = [];
 
     if (attendanceView === 'weekly') {
         const today = new Date();
         const dow = today.getDay(); // 0=Sun
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + (weekOffset * 7));
-        monday.setHours(0,0,0,0);
+        const saturday = new Date(today);
+        saturday.setDate(today.getDate() - ((dow + 1) % 7) + (weekOffset * 7));
+        saturday.setHours(0,0,0,0);
         for (let i = 0; i < 7; i++) {
-            const d = new Date(monday);
-            d.setDate(monday.getDate() + i);
+            const d = new Date(saturday);
+            d.setDate(saturday.getDate() + i);
             dates.push(d);
         }
         start = dates[0].toISOString();
@@ -1297,7 +1297,7 @@ async function loadAttendanceReport() {
 
             document.getElementById('attTableHead').innerHTML =
                 `<th style="min-width:150px">Worker</th>` +
-                dates.map(d => `<th class="att-day-cell">${dayNames[(d.getDay()+6)%7]}<br><small>${d.getDate()}</small></th>`).join('') +
+                dates.map(d => `<th class="att-day-cell">${dayNames[d.getDay()]}<br><small>${d.getDate()}</small></th>`).join('') +
                 `<th>Total Wage</th>`;
 
             document.getElementById('attTableBody').innerHTML = workers.map(w => {
@@ -1320,7 +1320,7 @@ async function loadAttendanceReport() {
             document.getElementById('attTableContainer').classList.add('hidden');
             document.getElementById('attCalendarView').classList.remove('hidden');
 
-            const firstDow  = (dates[0].getDay() + 6) % 7; // Mon=0..Sun=6
+            const firstDow  = (dates[0].getDay() + 1) % 7; // Sat=0..Fri=6
             const totalCells = firstDow + dates.length;
             const numWeeks   = Math.ceil(totalCells / 7);
             const todayStr   = new Date().toDateString();
@@ -1382,7 +1382,7 @@ async function loadAttendanceReport() {
                         <thead>
                             <tr>
                                 <th style="min-width:60px;text-align:left;padding-left:0.875rem;"></th>
-                                ${dayNames.map(d => `<th>${d}</th>`).join('')}
+                                ${['Sat','Sun','Mon','Tue','Wed','Thu','Fri'].map(d => `<th>${d}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>${rows}</tbody>
@@ -1408,14 +1408,14 @@ async function exportAttendance() {
     if (attendanceView === 'weekly') {
         const today = new Date();
         const dow = today.getDay();
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1) + (weekOffset * 7));
-        monday.setHours(0,0,0,0);
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-        sunday.setHours(23,59,59,999);
-        start = monday.toISOString();
-        end = sunday.toISOString();
+        const saturday = new Date(today);
+        saturday.setDate(today.getDate() - ((dow + 1) % 7) + (weekOffset * 7));
+        saturday.setHours(0,0,0,0);
+        const friday = new Date(saturday);
+        friday.setDate(saturday.getDate() + 6);
+        friday.setHours(23,59,59,999);
+        start = saturday.toISOString();
+        end = friday.toISOString();
     } else {
         const y = parseInt(year) || new Date().getFullYear();
         const m = parseInt(month) || new Date().getMonth() + 1;
@@ -1484,7 +1484,10 @@ async function loadWorkers() {
                 <td>${w.category}</td>
                 <td>₹${w.dailyWage}</td>
                 <td>
-                    <button class="btn-icon delete" onclick="deleteWorker('${w._id}')">🗑️</button>
+                    <div class="action-btns">
+                        <button class="btn-icon edit" onclick="editWorker('${w._id}', '${w.name}', ${w.dailyWage}, '${w.phone || ''}', '${w.category}', '${w.address || ''}', '${w.aadharNumber || ''}')">✏️</button>
+                        <button class="btn-icon delete" onclick="deleteWorker('${w._id}')">🗑️</button>
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -1493,21 +1496,41 @@ async function loadWorkers() {
 
 document.getElementById('workerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const id = document.getElementById('workerEditId').value;
     const payload = {
         name: document.getElementById('workerName').value,
         dailyWage: parseFloat(document.getElementById('workerWage').value),
         phone: document.getElementById('workerPhone').value,
+        address: document.getElementById('workerAddress').value,
+        aadharNumber: document.getElementById('workerAadhar').value,
         category: document.getElementById('workerCat').value
     };
     try {
-        const res = await apiFetch('/attendance', 'POST', payload);
+        const res = id 
+            ? await apiFetch(`/attendance/worker/${id}`, 'PUT', payload)
+            : await apiFetch('/attendance', 'POST', payload);
+            
         if (res.ok) {
-            showToast('Worker added successfully', 'success');
+            showToast(id ? 'Worker updated successfully' : 'Worker added successfully', 'success');
             document.getElementById('workerForm').reset();
+            document.getElementById('workerEditId').value = '';
             loadWorkers();
+        } else {
+            const d = await res.json();
+            showToast(d.message || 'Failed to save worker', 'error');
         }
     } catch { showToast('Error saving worker', 'error'); }
 });
+
+function editWorker(id, name, wage, phone, category, address, aadhar) {
+    document.getElementById('workerEditId').value = id;
+    document.getElementById('workerName').value = name;
+    document.getElementById('workerWage').value = wage;
+    document.getElementById('workerPhone').value = phone;
+    document.getElementById('workerCat').value = category;
+    document.getElementById('workerAddress').value = address;
+    document.getElementById('workerAadhar').value = aadhar;
+}
 
 async function deleteWorker(id) {
     if (!confirm('Are you sure you want to remove this worker?\n\nTheir attendance records will be preserved in the database but they will no longer appear in future reports.')) return;
@@ -1549,6 +1572,9 @@ async function openAttendanceLogger() {
             <td>
                 <input type="number" class="att-ot-input" value="0" min="0" step="0.5" style="max-width:80px" />
             </td>
+            <td>
+                <input type="number" class="att-advance-input" value="0" min="0" step="1" style="max-width:80px" />
+            </td>
         </tr>
     `).join('');
     openModal('attendanceLoggerModal');
@@ -1562,7 +1588,8 @@ document.getElementById('attendanceLoggerForm').addEventListener('submit', async
         entries.push({
             workerId: tr.dataset.workerId,
             status: tr.querySelector('.att-status-select').value,
-            overtimeHours: parseFloat(tr.querySelector('.att-ot-input').value) || 0
+            overtimeHours: parseFloat(tr.querySelector('.att-ot-input').value) || 0,
+            advancePayment: parseFloat(tr.querySelector('.att-advance-input').value) || 0
         });
     });
 

@@ -735,6 +735,14 @@
                     <label>Daily Wage (₹) *</label>
                     <input type="number" id="workerWage" placeholder="e.g. 500" required />
                 </div>
+                <div class="form-group">
+                    <label>Aadhar Number</label>
+                    <input type="text" id="workerAadhar" placeholder="Optional" />
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Address</label>
+                <textarea id="workerAddress" rows="2" placeholder="Optional"></textarea>
             </div>
             <div class="form-row">
                 <div class="form-group">
@@ -783,7 +791,7 @@
         <div class="table-card" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;">
             <table class="data-table">
                 <thead>
-                    <tr><th>Worker</th><th>Status</th><th>Overtime (Hrs)</th></tr>
+                    <tr><th>Worker</th><th>Status</th><th>Overtime (Hrs)</th><th>Advance (₹)</th></tr>
                 </thead>
                 <tbody id="attLogBody"></tbody>
             </table>

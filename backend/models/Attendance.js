@@ -5,6 +5,7 @@ const attendanceSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   status: { type: String, enum: ['Present', 'Absent', 'Half-Day'], default: 'Present' },
   overtimeHours: { type: Number, default: 0 },
+  advancePayment: { type: Number, default: 0 },
   wageEarned: { type: Number, required: true } // Calculated at time of entry: (status multiplier * dailyWage) + (overtime * rate)
 }, { timestamps: true });
 

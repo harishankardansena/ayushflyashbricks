@@ -41,7 +41,12 @@ router.post('/bulk', auth, async (req, res) => {
 
       const record = await Attendance.findOneAndUpdate(
         { worker: entry.workerId, date: new Date(date) },
-        { status: entry.status, overtimeHours: entry.overtimeHours || 0, wageEarned },
+        { 
+          status: entry.status, 
+          overtimeHours: entry.overtimeHours || 0, 
+          advancePayment: entry.advancePayment || 0,
+          wageEarned 
+        },
         { upsert: true, new: true }
       );
       results.push(record);
@@ -64,7 +69,8 @@ router.get('/stats', auth, async (req, res) => {
           daysPresent:   { $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] } },
           daysHalf:      { $sum: { $cond: [{ $eq: ['$status', 'Half-Day'] }, 1, 0] } },
           totalWages:    { $sum: '$wageEarned' },
-          totalOvertime: { $sum: '$overtimeHours' }
+          totalOvertime: { $sum: '$overtimeHours' },
+          totalAdvance:  { $sum: '$advancePayment' }
         }
       },
       // Only join with ACTIVE workers — soft-deleted workers are excluded
@@ -101,12 +107,18 @@ router.get('/excel', auth, async (req, res) => {
       { $match: { date: { $gte: startDate, $lte: endDate } } },
       { $group: {
           _id: '$worker',
-          totalWages: { $sum: '$wageEarned' }
+          totalWages: { $sum: '$wageEarned' },
+          totalAdvance: { $sum: '$advancePayment' }
         }
       }
     ]);
     const statsMap = {};
-    stats.forEach(s => { statsMap[s._id.toString()] = s.totalWages; });
+    stats.forEach(s => { 
+      statsMap[s._id.toString()] = {
+        totalWages: s.totalWages,
+        totalAdvance: s.totalAdvance
+      }; 
+    });
 
     // Build date list
     const dates = [];
@@ -139,7 +151,8 @@ router.get('/excel', auth, async (req, res) => {
         row[header] = status === 'Present' ? 'P' : status === 'Half-Day' ? 'H' : status === 'Absent' ? 'A' : '-';
       });
 
-      row['Total Wage (₹)'] = statsMap[w._id.toString()] || 0;
+      row['Total Advance Taken (₹)'] = statsMap[w._id.toString()]?.totalAdvance || 0;
+      row['Total Wage (₹)'] = statsMap[w._id.toString()]?.totalWages || 0;
       return row;
     });
 
