@@ -115,11 +115,36 @@
         <div class="topbar-title" id="pageTitle">Dashboard</div>
         <div class="topbar-right">
           <div class="date-display" id="topbarDate"></div>
-          <div class="notification-bell" id="notifBell" onclick="toggleNotifPanel()">
+          <div class="notification-bell" id="notifBell" onclick="handleBellClick()">
             🔔 <span class="notif-badge hidden" id="notifBadge">0</span>
           </div>
         </div>
       </header>
+
+      <!-- Adjustment Modal (Hidden) -->
+      <div class="modal-overlay hidden" id="adjustmentModal">
+        <div class="modal modal-sm">
+          <div class="modal-header">
+            <h3>Stock Adjustment</h3>
+            <button onclick="closeModal('adjustmentModal')">✕</button>
+          </div>
+          <form id="adjustmentForm">
+            <div class="form-group">
+              <label>Date *</label>
+              <input type="date" id="adjDate" required />
+            </div>
+            <div class="form-group">
+              <label>Adjustment Amount * (Subtracts from stock)</label>
+              <input type="number" id="adjAmount" placeholder="e.g. 2176" required />
+            </div>
+            <div class="form-group">
+              <label>Reason/Notes</label>
+              <textarea id="adjNotes" placeholder="Reason for adjustment" rows="2"></textarea>
+            </div>
+            <button type="submit" class="btn-primary btn-full">Apply Adjustment</button>
+          </form>
+        </div>
+      </div>
 
       <!-- Notification Panel -->
       <div class="notif-panel hidden" id="notifPanel">
@@ -194,6 +219,35 @@
           </div>
           <div class="inventory-grid" id="inventoryGrid"></div>
 
+          <div class="stats-grid" style="margin-top:1.5rem; margin-bottom: 2rem;">
+            <!-- Cement -->
+            <div class="stat-card" onclick="openInventoryDailyDetail('Cement', 'received')" style="cursor:pointer; --card-color: var(--info);">
+              <div class="stat-icon">📥</div>
+              <div class="stat-label">Cement Received</div>
+              <div class="stat-value" id="cementReceived">0</div>
+              <div class="stat-sub">Bags this month</div>
+            </div>
+            <div class="stat-card" onclick="openInventoryDailyDetail('Cement', 'used')" style="cursor:pointer; --card-color: var(--danger);">
+              <div class="stat-icon">🏗️</div>
+              <div class="stat-label">Cement Used</div>
+              <div class="stat-value" id="cementUsed">0</div>
+              <div class="stat-sub">Bags this month</div>
+            </div>
+            <!-- Bed Material -->
+            <div class="stat-card" onclick="openInventoryDailyDetail('Bed Material', 'received')" style="cursor:pointer; --card-color: var(--success);">
+              <div class="stat-icon">🚚</div>
+              <div class="stat-label">Bed Material Rec.</div>
+              <div class="stat-value" id="bedReceived">0</div>
+              <div class="stat-sub">kg this month</div>
+            </div>
+            <div class="stat-card" onclick="openInventoryDailyDetail('Bed Material', 'used')" style="cursor:pointer; --card-color: var(--warning);">
+              <div class="stat-icon">📉</div>
+              <div class="stat-label">Bed Material Used</div>
+              <div class="stat-value" id="bedUsed">0</div>
+              <div class="stat-sub">kg this month</div>
+            </div>
+          </div>
+
           <!-- USAGE TRACKER SECTION -->
           <div class="page-header" style="margin-top: 3rem;">
             <h2>Material Usage Tracker</h2>
@@ -255,6 +309,8 @@
               <option>Transport</option>
               <option>Raw Material</option>
               <option>Maintenance</option>
+              <option>Petrol</option>
+              <option>Diesel</option>
               <option>Miscellaneous</option>
             </select>
           </div>
@@ -304,7 +360,9 @@
                   <th>Customer</th>
                   <th>Phone</th>
                   <th>Bricks</th>
-                  <th>Amount</th>
+                  <th>Total</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
@@ -572,6 +630,8 @@
               <option>Transport</option>
               <option>Raw Material</option>
               <option>Maintenance</option>
+              <option>Petrol</option>
+              <option>Diesel</option>
               <option>Miscellaneous</option>
             </select>
           </div>
@@ -636,11 +696,17 @@
           </div>
           <div class="form-group">
             <label>Payment Status</label>
-            <select id="billPayStatus">
+            <select id="billPayStatus" onchange="togglePartialField()">
               <option>Paid</option>
               <option>Pending</option>
               <option>Partial</option>
             </select>
+          </div>
+        </div>
+        <div class="form-row hidden" id="partialPaidField">
+          <div class="form-group">
+            <label>Initial Amount Paid (₹) *</label>
+            <input type="number" id="billInitialPaid" min="0" step="0.01" placeholder="0" />
           </div>
         </div>
         <div class="form-row">
@@ -702,17 +768,36 @@
   </div>
 
   <!-- Bill View Modal -->
-  <div class="modal-overlay hidden" id="billViewModal">
-    <div class="modal modal-lg">
+  ... (kept as is) ...
+
+  <!-- Payment Update Modal -->
+  <div class="modal-overlay hidden" id="paymentModal">
+    <div class="modal">
       <div class="modal-header">
-        <h3>Bill Details</h3>
-        <button onclick="closeModal('billViewModal')">✕</button>
+        <h3>Update Payment / Settle Bill</h3>
+        <button onclick="closeModal('paymentModal')">✕</button>
       </div>
-      <div id="billViewContent" class="bill-print-area"></div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="closeModal('billViewModal')">Close</button>
-        <button class="btn-primary" onclick="printBill()">🖨️ Print Bill</button>
-      </div>
+      <form id="paymentForm">
+        <input type="hidden" id="payBillId" />
+        <div class="bill-summary-mini">
+            <div class="total-row"><span>Bill No:</span><span id="payBillNo"></span></div>
+            <div class="total-row"><span>Total Amount:</span><span id="payTotal"></span></div>
+            <div class="total-row"><span>Already Paid:</span><span id="payAlready"></span></div>
+            <div class="total-row final"><span>Balance Due:</span><span id="payBalance" style="color:var(--danger)"></span></div>
+        </div>
+        <div class="form-group" style="margin-top:1.5rem">
+          <label>Update Total Amount Paid (₹) *</label>
+          <div class="input-wrap">
+            <input type="number" id="payNewTotal" min="0" step="0.01" required />
+            <button type="button" class="btn-secondary btn-sm" onclick="settleFull()" style="padding:0.25rem 0.5rem; font-size:0.75rem; width:auto">Full Settle</button>
+          </div>
+          <p style="font-size:0.75rem; color:var(--text3); margin-top:0.25rem">Enter the new total amount that has been paid for this bill.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('paymentModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Update Payment</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -791,7 +876,7 @@
         <div class="table-card" style="max-height: 400px; overflow-y: auto; margin-bottom: 1rem;">
             <table class="data-table">
                 <thead>
-                    <tr><th>Worker</th><th>Status</th><th>Overtime (Hrs)</th><th>Advance (₹)</th></tr>
+                    <tr><th>Worker</th><th>Status</th><th>Overtime (Hrs)</th></tr>
                 </thead>
                 <tbody id="attLogBody"></tbody>
             </table>
@@ -824,7 +909,50 @@
     </div>
   </div>
 
+  <!-- Quick Restock Modal -->
+  <div class="modal-overlay hidden" id="restockModal">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h3>Add Stock: <span id="restockMatName"></span></h3>
+        <button onclick="closeModal('restockModal')">✕</button>
+      </div>
+      <form id="restockForm">
+        <input type="hidden" id="restockInvId" />
+        <div class="form-group">
+          <label>Quantity to Add * (<span id="restockUnit"></span>)</label>
+          <input type="number" id="restockQty" placeholder="0" required step="0.01" />
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="restockNotes" placeholder="e.g. 50 bags from XYZ supplier" rows="2"></textarea>
+        </div>
+        <button type="submit" class="btn-primary btn-full">Add to Stock</button>
+      </form>
+    </div>
+  </div>
+
   <script src="app.js"></script>
+  <!-- Cement Usage Calendar Modal -->
+  <div class="modal-overlay hidden" id="cementCalendarModal">
+    <div class="modal modal-lg" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3>Daily <span id="invCalendarMat"></span> <span id="invCalendarType"></span> - <span id="invCalendarMonth"></span></h3>
+        <button onclick="closeModal('cementCalendarModal')">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem;">
+        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center; margin-bottom: 8px; font-weight: 700; font-size: 0.8rem; color: var(--text3);">
+          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+        </div>
+        <div id="cementCalendarGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px;">
+          <!-- 7x5 matrix will be rendered here -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('cementCalendarModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 
 </html>

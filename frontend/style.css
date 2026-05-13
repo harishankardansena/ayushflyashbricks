@@ -909,3 +909,73 @@ body {
 .att-cal-cell.att-future { opacity: 0.3; }
 .att-cal-cell.att-norecord .att-date-num { color: var(--text3); }
 
+
+/* ===== EXPANDABLE ROWS (Production) ===== */
+.expandable-row {
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.expandable-row:hover td {
+  background: rgba(108,99,255,0.05) !important;
+}
+.expand-icon {
+  display: inline-block;
+  width: 18px;
+  text-align: center;
+  margin-right: 0.5rem;
+  transition: transform var(--transition);
+  color: var(--primary);
+  font-weight: 800;
+}
+.expandable-row.expanded .expand-icon {
+  transform: rotate(90deg);
+}
+.detail-row {
+  background: rgba(0,0,0,0.15);
+  display: none;
+}
+.detail-row.visible {
+  display: table-row;
+  animation: slideDown 0.2s ease-out;
+}
+.detail-container {
+  padding: 0;
+}
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface2);
+  margin: 0;
+}
+.detail-table thead th {
+  background: var(--surface3);
+  color: var(--text3);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.detail-table td {
+  padding: 0.625rem 1rem;
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text3);
+}
+.detail-table tr:last-child td {
+  border-bottom: none;
+}
+.detail-badge {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  background: var(--surface3);
+  border-radius: 4px;
+  color: var(--text2);
+  margin-right: 0.5rem;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}

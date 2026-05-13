@@ -4,23 +4,58 @@ const auth = require('../middleware/auth');
 const Production = require('../models/Production');
 const { syncStock } = require('../utils/stockUtils');
 
-// GET /api/production - List all with pagination
+// GET /api/production - Grouped by day
 router.get('/', auth, async (req, res) => {
   try {
-    const { page = 1, limit = 20, month, year } = req.query;
+    const { page = 1, limit = 15, month, year } = req.query;
     const filter = {};
     if (month && year) {
       const start = new Date(year, month - 1, 1);
       const end = new Date(year, month, 0, 23, 59, 59, 999);
       filter.date = { $gte: start, $lte: end };
     }
-    const total = await Production.countDocuments(filter);
-    const records = await Production.find(filter)
-      .sort({ date: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-    res.json({ records, total, page: parseInt(page), pages: Math.ceil(total / limit) });
+
+    // Aggregate to group by date
+    const grouped = await Production.aggregate([
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      { $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+        totalProduced: { $sum: "$produced" },
+        totalSold: { $sum: "$sold" },
+        logs: { $push: "$$ROOT" },
+        rawDate: { $first: "$date" } // Keep a raw date for sorting/display
+      }},
+      { $sort: { _id: -1 } },
+      { $skip: (page - 1) * parseInt(limit) },
+      { $limit: parseInt(limit) }
+    ]);
+
+    // Count distinct dates
+    const totalDays = await Production.aggregate([
+      { $match: filter },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } } } },
+      { $count: "count" }
+    ]);
+
+    const finalRecords = grouped.map(g => ({
+      _id: g.rawDate, // Use the raw date object for the frontend formatDate
+      totalProduced: g.totalProduced,
+      totalSold: g.totalSold,
+      logs: g.logs,
+      dateString: g._id
+    }));
+
+    console.log(`[Production] Found ${finalRecords.length} grouped days for filter:`, JSON.stringify(filter));
+
+    res.json({ 
+      records: finalRecords, 
+      total: totalDays[0]?.count || 0, 
+      page: parseInt(page), 
+      pages: Math.ceil((totalDays[0]?.count || 0) / parseInt(limit)) 
+    });
   } catch (err) {
+    console.error('Fetch production error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -28,7 +63,7 @@ router.get('/', auth, async (req, res) => {
 // POST /api/production - Add new entry
 router.post('/', auth, async (req, res) => {
   try {
-    const { date, produced, sold, notes } = req.body;
+    const { date, produced, sold, adjustment, notes } = req.body;
     const entryDate = new Date(date);
     entryDate.setHours(0, 0, 0, 0);
 
@@ -42,7 +77,7 @@ router.post('/', auth, async (req, res) => {
 
     const previousStock = lastRecord ? lastRecord.currentStock : 0;
 
-    const record = new Production({ date: entryDate, produced, sold, previousStock, notes });
+    const record = new Production({ date: entryDate, produced, sold, adjustment, previousStock, notes });
     await record.save();
     await syncStock();
     res.status(201).json(record);
@@ -55,13 +90,15 @@ router.post('/', auth, async (req, res) => {
 // PUT /api/production/:id - Update entry
 router.put('/:id', auth, async (req, res) => {
   try {
-    const { produced, sold, notes } = req.body;
+    const { produced, sold, adjustment, notes } = req.body;
     const record = await Production.findById(req.params.id);
     if (!record) return res.status(404).json({ message: 'Record not found' });
 
-    record.produced = produced;
-    record.sold = sold;
-    record.notes = notes;
+    if (produced !== undefined) record.produced = produced;
+    if (sold !== undefined) record.sold = sold;
+    if (adjustment !== undefined) record.adjustment = adjustment;
+    if (notes !== undefined) record.notes = notes;
+    
     await record.save();
     await syncStock();
     res.json(record);

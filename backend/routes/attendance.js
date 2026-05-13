@@ -44,7 +44,6 @@ router.post('/bulk', auth, async (req, res) => {
         { 
           status: entry.status, 
           overtimeHours: entry.overtimeHours || 0, 
-          advancePayment: entry.advancePayment || 0,
           wageEarned 
         },
         { upsert: true, new: true }
@@ -69,8 +68,7 @@ router.get('/stats', auth, async (req, res) => {
           daysPresent:   { $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] } },
           daysHalf:      { $sum: { $cond: [{ $eq: ['$status', 'Half-Day'] }, 1, 0] } },
           totalWages:    { $sum: '$wageEarned' },
-          totalOvertime: { $sum: '$overtimeHours' },
-          totalAdvance:  { $sum: '$advancePayment' }
+          totalOvertime: { $sum: '$overtimeHours' }
         }
       },
       // Only join with ACTIVE workers — soft-deleted workers are excluded
@@ -107,16 +105,14 @@ router.get('/excel', auth, async (req, res) => {
       { $match: { date: { $gte: startDate, $lte: endDate } } },
       { $group: {
           _id: '$worker',
-          totalWages: { $sum: '$wageEarned' },
-          totalAdvance: { $sum: '$advancePayment' }
+          totalWages: { $sum: '$wageEarned' }
         }
       }
     ]);
     const statsMap = {};
     stats.forEach(s => { 
       statsMap[s._id.toString()] = {
-        totalWages: s.totalWages,
-        totalAdvance: s.totalAdvance
+        totalWages: s.totalWages
       }; 
     });
 
@@ -151,7 +147,6 @@ router.get('/excel', auth, async (req, res) => {
         row[header] = status === 'Present' ? 'P' : status === 'Half-Day' ? 'H' : status === 'Absent' ? 'A' : '-';
       });
 
-      row['Total Advance Taken (₹)'] = statsMap[w._id.toString()]?.totalAdvance || 0;
       row['Total Wage (₹)'] = statsMap[w._id.toString()]?.totalWages || 0;
       return row;
     });

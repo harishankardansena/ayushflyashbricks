@@ -141,14 +141,16 @@ router.get('/excel', auth, async (req, res) => {
       'Taxable Amount (₹)': (b.bricks * b.ratePerBrick) + (b.workerCharge || 0) + (b.transportCharge || 0) - (b.discount || 0),
       'Discount (₹)': b.discount || 0,
       'Final Amount (₹)': b.finalAmount,
+      'Amount Paid (₹)': b.amountPaid || 0,
+      'Balance (₹)': (b.finalAmount || 0) - (b.amountPaid || 0),
       'Payment Status': b.paymentStatus,
       'Notes': b.notes || ''
     }));
-    const totalRev = bills.reduce((sum, b) => sum + (b.finalAmount || 0), 0);
+    const totalRev = bills.reduce((sum, b) => sum + (b.amountPaid || 0), 0);
     if (billData.length === 0) billData.push({ 'Bill No': 'No records' });
-    billData.push({ 'Bill No': '', 'Date': '', 'Customer Name': '', 'Phone': '', 'Address': '', 'Bricks': '', 'Rate/Brick (₹)': '', 'Total (₹)': '', 'Discount (₹)': '', 'Final Amount (₹)': totalRev, 'Payment Status': 'TOTAL', 'Notes': '' });
+    billData.push({ 'Bill No': '', 'Date': '', 'Customer Name': '', 'Phone': '', 'Address': '', 'Bricks': '', 'Rate/Brick (₹)': '', 'Total (₹)': '', 'Discount (₹)': '', 'Final Amount (₹)': '', 'Amount Paid (₹)': totalRev, 'Payment Status': 'TOTAL', 'Notes': '' });
     const billSheet = XLSX.utils.json_to_sheet(billData);
-    billSheet['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 25 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 20 }];
+    billSheet['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 14 }, { wch: 25 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(workbook, billSheet, 'Billing');
 
     // === Sheet 7: Summary ===

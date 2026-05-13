@@ -426,27 +426,80 @@ async function loadProduction(page = 1) {
       return;
     }
 
-    tbody.innerHTML = data.records.map(r => `
-      <tr>
-        <td>${formatDate(r.date)}</td>
-        <td>${fmt(r.previousStock)}</td>
-        <td><strong style="color:var(--primary)">${fmt(r.produced)}</strong></td>
-        <td><strong style="color:var(--success)">${fmt(r.sold)}</strong></td>
-        <td><strong style="color:var(--text)">${fmt(r.currentStock)}</strong></td>
-        <td style="color:var(--text3); font-size:0.8rem">${r.notes || '—'}</td>
-        <td>
-          <div class="action-btns">
-            <button class="btn-icon edit" onclick="editProduction('${r._id}','${r.date}',${r.produced},${r.sold},'${r.notes||''}')">✏️</button>
-            <button class="btn-icon delete" onclick="deleteRecord('${r._id}','production','productionBody')">🗑️</button>
-          </div>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = data.records.map((day, index) => {
+      // Find latest and earliest log for accurate stock display
+      // Backend sorts by createdAt desc, so logs[0] is latest
+      const latestLog = day.logs[0];
+      const earliestLog = day.logs[day.logs.length - 1];
+      
+      const detailRows = day.logs.map(r => `
+        <tr>
+          <td style="padding-left: 2.5rem;"><span class="detail-badge">Log</span> ${new Date(r.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+          <td>${fmt(r.previousStock)}</td>
+          <td><span style="color:var(--primary)">${fmt(r.produced)}</span></td>
+          <td><span style="color:var(--success)">${fmt(r.sold)}</span></td>
+          <td><span style="color:var(--danger)">${fmt(r.adjustment || 0)}</span></td>
+          <td>${fmt(r.currentStock)}</td>
+          <td style="font-size:0.75rem">${r.notes || '—'}</td>
+          <td>
+            <div class="action-btns">
+              <button class="btn-icon edit" onclick="editProduction('${r._id}','${r.date}',${r.produced},${r.sold},'${r.notes||''}',${r.adjustment||0})">✏️</button>
+              <button class="btn-icon delete" onclick="deleteRecord('${r._id}','production','productionBody')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      return `
+        <tr class="expandable-row" onclick="toggleProductionRow(this, 'detail-${index}')">
+          <td><span class="expand-icon">▶</span><strong>${formatDate(day._id)}</strong></td>
+          <td>${fmt(earliestLog.previousStock)}</td>
+          <td><strong style="color:var(--primary)">${fmt(day.totalProduced)}</strong></td>
+          <td><strong style="color:var(--success)">${fmt(day.totalSold)}</strong></td>
+          <td><strong style="color:var(--text)">${fmt(latestLog.currentStock)}</strong></td>
+          <td style="color:var(--text3); font-size:0.8rem">${day.logs.length} entries</td>
+          <td>
+            <button class="btn-secondary btn-sm" style="padding:2px 8px; font-size:0.7rem">View Logs</button>
+          </td>
+        </tr>
+        <tr id="detail-${index}" class="detail-row">
+          <td colspan="7" class="detail-container">
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Prev Stock</th>
+                  <th>Produced</th>
+                  <th>Sold</th>
+                  <th>Adj.</th>
+                  <th>Current Stock</th>
+                  <th>Notes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${detailRows}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      `;
+    }).join('');
 
     renderPagination('prodPagination', data.page, data.pages, (p) => loadProduction(p));
   } catch (err) {
     console.error(err);
     showToast('Failed to load production data', 'error');
+  }
+}
+
+function toggleProductionRow(row, detailId) {
+  const detail = document.getElementById(detailId);
+  if (detail) {
+    const isVisible = detail.classList.contains('visible');
+    detail.classList.toggle('visible');
+    row.classList.toggle('expanded');
+    row.querySelector('.expand-icon').textContent = isVisible ? '▶' : '▼';
   }
 }
 
@@ -476,13 +529,13 @@ document.getElementById('productionForm').addEventListener('submit', async (e) =
   } catch { showToast('Server error', 'error'); }
 });
 
-function editProduction(id, date, produced, sold, notes) {
+function editProduction(id, date, produced, sold, notes, adjustment = 0) {
   document.getElementById('prodEditId').value = id;
   document.getElementById('prodDate').value = date.split('T')[0];
   document.getElementById('prodProduced').value = produced;
   document.getElementById('prodSold').value = sold;
   document.getElementById('prodNotes').value = notes;
-  document.getElementById('prodModalTitle').textContent = 'Edit Production Entry';
+  // Adjustment is hidden in the normal modal but we can handle it if needed
   openModal('productionModal');
 }
 
@@ -494,6 +547,7 @@ async function loadInventory() {
     const res = await apiFetch('/inventory');
     const items = await res.json();
     const grid = document.getElementById('inventoryGrid');
+    loadInventorySummary();
 
     if (!items || items.length === 0) {
       grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📦</div>No inventory items. Add raw materials.</div>`;
@@ -518,10 +572,15 @@ async function loadInventory() {
             ${item.notes ? '<br>' + item.notes : ''}
           </div>
           <div class="inv-actions">
+            <button class="btn-primary" style="flex:1; font-size:0.8rem" 
+              onclick="openRestockModal('${item._id}','${item.material}','${item.unit}')">
+              ➕ Add
+            </button>
             <button class="btn-secondary" style="flex:1; font-size:0.8rem" 
               onclick="editInventory('${item._id}','${item.material}',${item.quantity},'${item.unit}',${item.minimumLevel},'${item.notes||''}')">
-              ✏️ Update
+              ✏️ Edit
             </button>
+            ${item.material === 'Cement' ? `<button class="btn-icon view" onclick="openInventoryDailyDetail('Cement', 'used')" title="View Monthly Usage">📅</button>` : ''}
             <button class="btn-icon delete" onclick="deleteRecord('${item._id}','inventory','inventoryGrid')">🗑️</button>
           </div>
         </div>
@@ -872,19 +931,22 @@ async function loadBilling(page = 1, filterDate = '') {
         <span class="value" style="color:var(--info)">${data.total}</span>
       </div>
       <div class="billing-total-card">
-        <span class="label">Total Revenue</span>
+        <span class="label">Total Paid (Revenue)</span>
         <span class="value">₹${fmtMoney(data.totalRevenue)}</span>
       </div>
     `;
 
     const tbody = document.getElementById('billingBody');
     if (!data.records || data.records.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">🧾</div>No bills found</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🧾</div>No bills found</div></td></tr>`;
       return;
     }
 
     tbody.innerHTML = data.records.map(b => {
       const statusClass = `status-${b.paymentStatus.toLowerCase()}`;
+      const balance = (b.finalAmount || 0) - (b.amountPaid || 0);
+      const settleBtn = b.paymentStatus !== 'Paid' ? `<button class="btn-icon edit" onclick='openPaymentModal(${JSON.stringify(b)})' title="Settle Payment">💰</button>` : '';
+      
       return `
         <tr>
           <td><strong style="color:var(--primary)">${b.billNumber}</strong></td>
@@ -892,11 +954,14 @@ async function loadBilling(page = 1, filterDate = '') {
           <td><strong>${b.customer.name}</strong></td>
           <td>${b.customer.phone}</td>
           <td>${fmt(b.bricks)}</td>
-          <td><strong style="color:var(--success)">₹${fmtMoney(b.finalAmount)}</strong></td>
+          <td><strong style="color:var(--text2)">₹${fmtMoney(b.finalAmount)}</strong></td>
+          <td><strong style="color:var(--success)">₹${fmtMoney(b.amountPaid || 0)}</strong></td>
+          <td><strong style="color:var(--danger)">₹${fmtMoney(balance)}</strong></td>
           <td><span class="status-badge ${statusClass}">${b.paymentStatus}</span></td>
           <td>
             <div class="action-btns">
               <button class="btn-icon view" onclick="viewBill('${b._id}')">👁️</button>
+              ${settleBtn}
               <button class="btn-icon delete" onclick="deleteRecord('${b._id}','billing','billingBody')">🗑️</button>
             </div>
           </td>
@@ -926,6 +991,7 @@ document.getElementById('billingForm').addEventListener('submit', async (e) => {
     sgstRate: parseFloat(document.getElementById('billSgst').value) || 0,
     discount: parseFloat(document.getElementById('billDiscount').value) || 0,
     paymentStatus: document.getElementById('billPayStatus').value,
+    amountPaid: document.getElementById('billPayStatus').value === 'Partial' ? (parseFloat(document.getElementById('billInitialPaid').value) || 0) : 0,
     notes: document.getElementById('billNotes').value
   };
 
@@ -1298,7 +1364,6 @@ async function loadAttendanceReport() {
             document.getElementById('attTableHead').innerHTML =
                 `<th style="min-width:150px">Worker</th>` +
                 dates.map(d => `<th class="att-day-cell">${dayNames[d.getDay()]}<br><small>${d.getDate()}</small></th>`).join('') +
-                `<th>Total Advance</th>` +
                 `<th>Total Wage</th>`;
 
             document.getElementById('attTableBody').innerHTML = workers.map(w => {
@@ -1311,7 +1376,6 @@ async function loadAttendanceReport() {
                 return `<tr>
                     <td><strong>${w.name}</strong><br><small style="color:var(--text3)">${w.category} · ₹${w.dailyWage}/d</small></td>
                     ${cells}
-                    <td><strong style="color:var(--danger)">₹${fmtMoney(ws?.totalAdvance || 0)}</strong></td>
                     <td><strong style="color:var(--success)">₹${fmtMoney(ws?.totalWages || 0)}</strong></td>
                 </tr>`;
             }).join('');
@@ -1374,9 +1438,6 @@ async function loadAttendanceReport() {
                             <strong style="font-size:1rem">${w.name}</strong>
                             <span class="cat-badge cat-${w.category.toLowerCase()}">${w.category}</span>
                             <small style="color:var(--text3)">₹${w.dailyWage}/day</small>
-                        </div>
-                        <div style="font-weight:700;color:var(--danger);font-size:1rem">
-                            Advance: ₹${fmtMoney(ws?.totalAdvance || 0)}
                         </div>
                         <div style="font-weight:700;color:var(--success);font-size:1rem">
                             Total Wages: ₹${fmtMoney(ws?.totalWages || 0)}
@@ -1578,9 +1639,6 @@ async function openAttendanceLogger() {
             <td>
                 <input type="number" class="att-ot-input" value="0" min="0" step="0.5" style="max-width:80px" />
             </td>
-            <td>
-                <input type="number" class="att-advance-input" value="0" min="0" step="1" style="max-width:80px" />
-            </td>
         </tr>
     `).join('');
     openModal('attendanceLoggerModal');
@@ -1592,17 +1650,11 @@ document.getElementById('attendanceLoggerForm').addEventListener('submit', async
     const entries = [];
     document.querySelectorAll('#attLogBody tr').forEach(tr => {
         const status = tr.querySelector('.att-status-select').value;
-        const advance = parseFloat(tr.querySelector('.att-advance-input').value) || 0;
-        const ot = parseFloat(tr.querySelector('.att-ot-input').value) || 0;
-        
-        // If status is empty but they took an advance, maybe log it as Absent with advance? 
-        // Best to just require a status if logging, or skip if completely empty
-        if (status !== '' || advance > 0) {
+        if (status !== '') {
             entries.push({
                 workerId: tr.dataset.workerId,
-                status: status || 'Absent', // default to Absent if just logging advance
-                overtimeHours: ot,
-                advancePayment: advance
+                status: status,
+                overtimeHours: ot
             });
         }
     });
@@ -1617,3 +1669,211 @@ document.getElementById('attendanceLoggerForm').addEventListener('submit', async
     } catch { showToast('Error saving attendance', 'error'); }
 });
 
+// Payment Settlement Logic
+function togglePartialField() {
+  const status = document.getElementById('billPayStatus').value;
+  const field = document.getElementById('partialPaidField');
+  if (field) field.classList.toggle('hidden', status !== 'Partial');
+}
+
+let currentPayBill = null;
+function openPaymentModal(bill) {
+    currentPayBill = bill;
+    document.getElementById('payBillId').value = bill._id;
+    document.getElementById('payBillNo').textContent = bill.billNumber;
+    document.getElementById('payTotal').textContent = `₹${fmtMoney(bill.finalAmount)}`;
+    document.getElementById('payAlready').textContent = `₹${fmtMoney(bill.amountPaid || 0)}`;
+    const balance = bill.finalAmount - (bill.amountPaid || 0);
+    document.getElementById('payBalance').textContent = `₹${fmtMoney(balance)}`;
+    document.getElementById('payNewTotal').value = bill.amountPaid || 0;
+    openModal('paymentModal');
+}
+
+function settleFull() {
+    if (currentPayBill) {
+        document.getElementById('payNewTotal').value = currentPayBill.finalAmount;
+    }
+}
+
+document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('payBillId').value;
+    const newTotalPaid = parseFloat(document.getElementById('payNewTotal').value);
+
+    if (newTotalPaid < (currentPayBill?.amountPaid || 0)) {
+        if (!confirm('New paid amount is less than previously recorded. Are you sure?')) return;
+    }
+
+    try {
+        const res = await apiFetch(`/billing/${id}/payment`, 'PATCH', { 
+            amountPaid: newTotalPaid,
+            paymentStatus: newTotalPaid >= currentPayBill.finalAmount ? 'Paid' : 'Partial'
+        });
+
+        if (res.ok) {
+            showToast('Payment updated successfully', 'success');
+            closeModal('paymentModal');
+            loadBilling(billCurrentPage);
+            if (currentPage === 'dashboard') loadDashboard();
+        } else {
+            const d = await res.json();
+            showToast(d.message || 'Failed to update payment', 'error');
+        }
+    } catch { showToast('Server error', 'error'); }
+});
+
+// Inventory Summary (Received vs Used)
+async function loadInventorySummary() {
+    try {
+        const now = new Date();
+        const month = now.getMonth() + 1;
+        const year = now.getFullYear();
+        const res = await apiFetch(`/inventory/monthly-summary?month=${month}&year=${year}`);
+        const data = await res.json();
+        
+        const used = data.used || [];
+        const received = data.received || [];
+
+        const findQty = (arr, mat) => {
+            const found = arr.find(m => m._id === mat);
+            return found ? found.total : 0;
+        };
+
+        // Update UI
+        if (document.getElementById('cementReceived')) document.getElementById('cementReceived').textContent = fmt(findQty(received, 'Cement'));
+        if (document.getElementById('cementUsed')) document.getElementById('cementUsed').textContent = fmt(findQty(used, 'Cement'));
+        if (document.getElementById('bedReceived')) document.getElementById('bedReceived').textContent = fmt(findQty(received, 'Bed Material'));
+        if (document.getElementById('bedUsed')) document.getElementById('bedUsed').textContent = fmt(findQty(used, 'Bed Material'));
+        
+    } catch (err) { console.error('Summary load error:', err); }
+}
+
+async function openInventoryDailyDetail(material, type) {
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    const monthName = now.toLocaleString('default', { month: 'long' });
+    
+    if (document.getElementById('invCalendarMat')) document.getElementById('invCalendarMat').textContent = material;
+    if (document.getElementById('invCalendarType')) document.getElementById('invCalendarType').textContent = type.charAt(0).toUpperCase() + type.slice(1);
+    if (document.getElementById('invCalendarMonth')) document.getElementById('invCalendarMonth').textContent = `${monthName} ${year}`;
+    
+    const grid = document.getElementById('cementCalendarGrid');
+    if (grid) grid.innerHTML = '<div style="grid-column:1/-1; padding:2rem; text-align:center;">Loading...</div>';
+    openModal('cementCalendarModal');
+
+    try {
+        const res = await apiFetch(`/inventory/daily-usage?material=${encodeURIComponent(material)}&month=${month}&year=${year}&type=${type}`);
+        const dailyData = await res.json();
+        
+        // Create a map of day -> quantity
+        const usageMap = {};
+        dailyData.forEach(d => { usageMap[d._id] = d.totalQty; });
+
+        const firstDay = new Date(year, month - 1, 1).getDay(); // 0=Sun
+        const startOffset = firstDay === 0 ? 6 : firstDay - 1; // Mon=0
+        const daysInMonth = new Date(year, month, 0).getDate();
+        let gridHtml = '';
+        const totalCells = (startOffset + daysInMonth) > 35 ? 42 : 35;
+
+        for (let i = 0; i < totalCells; i++) {
+            const dayNum = i - startOffset + 1;
+            if (dayNum > 0 && dayNum <= daysInMonth) {
+                const qty = usageMap[dayNum] || 0;
+                gridHtml += `
+                    <div style="background:var(--surface2); border-radius:8px; padding:8px; min-height:60px; display:flex; flex-direction:column; justify-content:space-between; border:1px solid var(--surface3)">
+                        <div style="font-size:0.75rem; font-weight:700; color:var(--text3); text-align:left">${dayNum}</div>
+                        <div style="font-size:0.9rem; font-weight:800; color:${qty > 0 ? 'var(--primary)' : 'var(--text3)'}">${qty > 0 ? fmt(qty) : '-'}</div>
+                    </div>
+                `;
+            } else {
+                gridHtml += `<div style="background:transparent; border-radius:8px; padding:8px; min-height:60px;"></div>`;
+            }
+        }
+        if (grid) grid.innerHTML = gridHtml;
+    } catch (err) {
+        console.error(err);
+        if (grid) grid.innerHTML = '<div style="grid-column:1/-1; padding:2rem; text-align:center; color:var(--danger);">Error loading data</div>';
+    }
+}
+
+// Quick Restock Logic
+function openRestockModal(id, material, unit) {
+    document.getElementById('restockInvId').value = id;
+    document.getElementById('restockMatName').textContent = material;
+    document.getElementById('restockUnit').textContent = unit;
+    document.getElementById('restockQty').value = '';
+    document.getElementById('restockNotes').value = '';
+    openModal('restockModal');
+}
+
+document.getElementById('restockForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('restockInvId').value;
+    const quantity = parseFloat(document.getElementById('restockQty').value);
+    const notes = document.getElementById('restockNotes').value;
+
+    try {
+        const res = await apiFetch(`/inventory/${id}/restock`, 'POST', { quantity, notes });
+        const data = await res.json();
+        if (res.ok) {
+            showToast(data.message, 'success');
+            closeModal('restockModal');
+            loadInventory();
+            if (currentPage === 'dashboard') loadDashboard();
+        } else {
+            showToast(data.message || 'Failed to add stock', 'error');
+        }
+    } catch { showToast('Server error', 'error'); }
+});
+// Hidden Stock Adjustment Logic
+let bellClickCount = 0;
+let bellClickTimer = null;
+
+function handleBellClick() {
+    bellClickCount++;
+    if (bellClickTimer) clearTimeout(bellClickTimer);
+    
+    if (bellClickCount === 3) {
+        bellClickCount = 0;
+        openAdjustmentModal();
+    } else {
+        bellClickTimer = setTimeout(() => {
+            bellClickCount = 0;
+        }, 1000); // 1 second window for 3 clicks
+        toggleNotifPanel();
+    }
+}
+
+function openAdjustmentModal() {
+    document.getElementById('adjustmentForm').reset();
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('adjDate').value = today;
+    document.getElementById('adjustmentModal').classList.remove('hidden');
+}
+
+document.getElementById('adjustmentForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        date: document.getElementById('adjDate').value,
+        produced: 0,
+        sold: 0,
+        adjustment: parseInt(document.getElementById('adjAmount').value),
+        notes: document.getElementById('adjNotes').value || 'Manual hidden adjustment'
+    };
+
+    try {
+        const res = await apiFetch('/production', 'POST', payload);
+        if (res.ok) {
+            showToast('Stock adjusted successfully!', 'success');
+            closeModal('adjustmentModal');
+            if (currentPage === 'dashboard') loadDashboard();
+            if (currentPage === 'production') loadProduction();
+        } else {
+            const data = await res.json();
+            showToast(data.message || 'Failed to adjust stock', 'error');
+        }
+    } catch {
+        showToast('Server error', 'error');
+    }
+});

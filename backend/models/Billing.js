@@ -19,6 +19,7 @@ const billingSchema = new mongoose.Schema({
   discount: { type: Number, default: 0 },
   finalAmount: { type: Number },
   paymentStatus: { type: String, enum: ['Paid', 'Pending', 'Partial'], default: 'Paid' },
+  amountPaid: { type: Number, default: 0 },
   notes: { type: String, default: '' }
 }, { timestamps: true });
 
@@ -37,6 +38,15 @@ billingSchema.pre('save', function(next) {
     this.totalAmount = taxableAmount;
     this.finalAmount = taxableAmount;
   }
+
+  // Handle automatic payment amounts based on status
+  if (this.paymentStatus === 'Paid') {
+    this.amountPaid = this.finalAmount;
+  } else if (this.paymentStatus === 'Pending') {
+    this.amountPaid = 0;
+  }
+  // For Partial, amountPaid is manually set and preserved
+
   next();
 });
 

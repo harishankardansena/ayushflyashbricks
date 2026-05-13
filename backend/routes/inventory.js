@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Inventory = require('../models/Inventory');
 const InventoryUsage = require('../models/InventoryUsage');
+const InventoryRestock = require('../models/InventoryRestock');
 
 // GET /api/inventory
 router.get('/', auth, async (req, res) => {
@@ -10,6 +11,7 @@ router.get('/', auth, async (req, res) => {
     const items = await Inventory.find().sort({ material: 1 });
     res.json(items);
   } catch (err) {
+    console.error('Inventory GET error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -26,6 +28,7 @@ router.post('/', auth, async (req, res) => {
     await item.save();
     res.status(201).json(item);
   } catch (err) {
+    console.error('Inventory GET error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -34,14 +37,67 @@ router.post('/', auth, async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const { quantity, unit, minimumLevel, notes } = req.body;
-    const item = await Inventory.findByIdAndUpdate(
-      req.params.id,
-      { quantity, unit, minimumLevel, notes, lastUpdated: new Date() },
-      { new: true }
-    );
+    const item = await Inventory.findById(req.params.id);
     if (!item) return res.status(404).json({ message: 'Item not found' });
+
+    const prevQty = item.quantity;
+    const added = quantity - prevQty;
+
+    // Log restock if quantity increased
+    if (added > 0) {
+      const restock = new InventoryRestock({
+        inventory: item._id,
+        material: item.material,
+        quantityAdded: added,
+        unit: unit || item.unit,
+        date: new Date(),
+        notes: notes || 'Manual restock'
+      });
+      await restock.save();
+    }
+
+    item.quantity = quantity;
+    if (unit) item.unit = unit;
+    item.minimumLevel = minimumLevel;
+    item.notes = notes;
+    item.lastUpdated = new Date();
+    await item.save();
+
     res.json(item);
   } catch (err) {
+    console.error('Inventory GET error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/inventory/:id/restock - Quick add stock
+router.post('/:id/restock', auth, async (req, res) => {
+  try {
+    const { quantity, notes } = req.body;
+    if (!quantity || quantity <= 0) return res.status(400).json({ message: 'Valid quantity required' });
+
+    const item = await Inventory.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: 'Item not found' });
+
+    // Log restock
+    const restock = new InventoryRestock({
+      inventory: item._id,
+      material: item.material,
+      quantityAdded: quantity,
+      unit: item.unit,
+      date: new Date(),
+      notes: notes || 'Quick restock'
+    });
+    await restock.save();
+
+    // Update inventory
+    item.quantity += quantity;
+    item.lastUpdated = new Date();
+    await item.save();
+
+    res.json({ message: `✅ Added ${quantity} ${item.unit} to ${item.material}`, updatedInventory: item });
+  } catch (err) {
+    console.error('Inventory GET error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -53,6 +109,7 @@ router.delete('/:id', auth, async (req, res) => {
     await InventoryUsage.deleteMany({ inventory: req.params.id });
     res.json({ message: 'Item deleted' });
   } catch (err) {
+    console.error('Inventory GET error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -88,6 +145,67 @@ router.get('/usage', auth, async (req, res) => {
     ]);
 
     res.json({ records, total, totalByMaterial, page: parseInt(page), pages: Math.ceil(total / limit) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/inventory/monthly-summary - Get received vs used for a month
+router.get('/monthly-summary', auth, async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (!month || !year) return res.status(400).json({ message: 'Month and year required' });
+
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+    // Get usage totals
+    const used = await InventoryUsage.aggregate([
+      { $match: { date: { $gte: start, $lte: end } } },
+      { $group: { _id: '$material', total: { $sum: '$usedQuantity' } } }
+    ]);
+
+    // Get restock totals
+    const received = await InventoryRestock.aggregate([
+      { $match: { date: { $gte: start, $lte: end } } },
+      { $group: { _id: '$material', total: { $sum: '$quantityAdded' } } }
+    ]);
+
+    res.json({ used, received });
+  } catch (err) {
+    console.error('Inventory GET error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/inventory/daily-usage - Grouped by day for a month
+router.get('/daily-usage', auth, async (req, res) => {
+  try {
+    const { material, month, year, type = 'used' } = req.query;
+    if (!material || !month || !year) return res.status(400).json({ message: 'Missing parameters' });
+
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const Model = type === 'received' ? InventoryRestock : InventoryUsage;
+    const qtyField = type === 'received' ? '$quantityAdded' : '$usedQuantity';
+
+    const usage = await Model.aggregate([
+      { $match: { 
+          material: material,
+          date: { $gte: start, $lte: end }
+        }
+      },
+      { $group: { 
+          _id: { $dayOfMonth: '$date' },
+          totalQty: { $sum: qtyField }
+        }
+      },
+      { $sort: { '_id': 1 } }
+    ]);
+
+    res.json(usage);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -158,6 +276,7 @@ router.delete('/usage/:id', auth, async (req, res) => {
     await InventoryUsage.findByIdAndDelete(req.params.id);
     res.json({ message: 'Usage record deleted and stock restored' });
   } catch (err) {
+    console.error('Inventory GET error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -178,15 +297,30 @@ router.post('/deduct', auth, async (req, res) => {
     ];
 
     for (const { item, qty } of deductions) {
-      if (item) {
+      if (item && qty > 0) {
+        // Log the usage first
+        const usage = new InventoryUsage({
+          inventory: item._id,
+          material: item.material,
+          usedQuantity: qty,
+          unit: item.unit,
+          purpose: `Auto-deduction for production of ${bricksProduced} bricks`,
+          date: new Date(),
+          remainingAfter: Math.max(0, item.quantity - qty)
+        });
+        await usage.save();
+
+        // Update inventory
         item.quantity = Math.max(0, item.quantity - qty);
         item.lastUpdated = new Date();
         await item.save();
+        
         results.push({ material: item.material, deducted: qty, remaining: item.quantity });
       }
     }
     res.json({ message: 'Inventory deducted', results });
   } catch (err) {
+    console.error('Inventory GET error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });

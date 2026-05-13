@@ -12,8 +12,24 @@ async function generateBillNumber(date) {
   const dd = String(d.getDate()).padStart(2, '0');
   const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
   const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
-  const count = await Billing.countDocuments({ date: { $gte: dayStart, $lte: dayEnd } });
-  const xx = String(count + 1).padStart(2, '0');
+
+  // Find the last bill of the day to get the highest sequence number
+  const lastBill = await Billing.findOne({
+    date: { $gte: dayStart, $lte: dayEnd }
+  }).sort({ billNumber: -1 });
+
+  let nextSeq = 1;
+  if (lastBill && lastBill.billNumber) {
+    const parts = lastBill.billNumber.split('-');
+    if (parts.length === 3) {
+      const lastSeq = parseInt(parts[2]);
+      if (!isNaN(lastSeq)) {
+        nextSeq = lastSeq + 1;
+      }
+    }
+  }
+
+  const xx = String(nextSeq).padStart(2, '0');
   return `${mm}-${dd}-${xx}`;
 }
 
@@ -50,7 +66,7 @@ router.get('/', auth, async (req, res) => {
 
     const totalRevenue = await Billing.aggregate([
       { $match: filter },
-      { $group: { _id: null, total: { $sum: '$finalAmount' } } }
+      { $group: { _id: null, total: { $sum: '$amountPaid' } } }
     ]);
 
     res.json({
@@ -76,16 +92,34 @@ router.get('/:id', auth, async (req, res) => {
 // POST /api/billing - Create new bill
 router.post('/', auth, async (req, res) => {
   try {
-    const { customer, bricks, ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate, discount, paymentStatus, notes, date } = req.body;
+    const { customer, bricks, ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate, discount, paymentStatus, amountPaid, notes, date } = req.body;
     const billDate = date ? new Date(date) : new Date();
-    const billNumber = await generateBillNumber(billDate);
 
-    const bill = new Billing({
-      billNumber, date: billDate, customer, bricks,
-      ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate,
-      discount, paymentStatus, notes
-    });
-    await bill.save();
+    let bill;
+    let saved = false;
+    let attempts = 0;
+
+    // Retry loop to handle rare race conditions for bill number generation
+    while (!saved && attempts < 5) {
+      attempts++;
+      const billNumber = await generateBillNumber(billDate);
+
+      try {
+        bill = new Billing({
+          billNumber, date: billDate, customer, bricks,
+          ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate,
+          discount, paymentStatus, amountPaid: amountPaid || 0, notes
+        });
+        await bill.save();
+        saved = true;
+      } catch (err) {
+        if (err.code === 11000 && attempts < 5) {
+          console.warn(`Duplicate bill number detected (attempt ${attempts}), retrying...`);
+          continue;
+        }
+        throw err;
+      }
+    }
 
     // Reduce stock automatically
     const today = new Date(billDate);
@@ -93,28 +127,55 @@ router.post('/', auth, async (req, res) => {
     const todayEnd = new Date(billDate);
     todayEnd.setHours(23, 59, 59, 999);
 
-    let prodRecord = await Production.findOne({ date: { $gte: today, $lte: todayEnd } });
-    if (prodRecord) {
-      prodRecord.sold += bricks;
-      await prodRecord.save();
-    } else {
-      // Create a production record for today so stock is tracked
-      const lastRecord = await Production.findOne({ date: { $lt: today } }).sort({ date: -1 });
-      const previousStock = lastRecord ? lastRecord.currentStock : 0;
-      prodRecord = new Production({
-        date: today,
-        produced: 0,
-        sold: bricks,
-        previousStock,
-        notes: 'Auto-created from Billing'
-      });
-      await prodRecord.save();
-    }
+    // Reduce stock automatically by creating a separate production log entry for this sale
+
+
+    const lastRecord = await Production.findOne({ 
+      $or: [
+        { date: { $lt: today } },
+        { date: today, createdAt: { $lt: new Date() } } // This is a bit loose but syncStock handles it
+      ]
+    }).sort({ date: -1, createdAt: -1 });
+    
+    const previousStock = lastRecord ? lastRecord.currentStock : 0;
+    
+    const prodRecord = new Production({
+      date: today,
+      produced: 0,
+      sold: bricks,
+      previousStock,
+      notes: `Sold: Bill ${bill.billNumber}`
+    });
+    
+    await prodRecord.save();
     await syncStock();
 
     res.status(201).json(bill);
   } catch (err) {
     console.error(err);
+    res.status(500).json({ message: err.code === 11000 ? 'Duplicate bill number conflict' : 'Server error' });
+  }
+});
+
+// PATCH /api/billing/:id/payment - Update payment for partial/pending
+router.patch('/:id/payment', auth, async (req, res) => {
+  try {
+    const { amountPaid, paymentStatus } = req.body;
+    const bill = await Billing.findById(req.params.id);
+    if (!bill) return res.status(404).json({ message: 'Bill not found' });
+
+    if (amountPaid !== undefined) bill.amountPaid = amountPaid;
+    if (paymentStatus !== undefined) bill.paymentStatus = paymentStatus;
+
+    // Auto-settle if paid fully
+    if (bill.amountPaid >= bill.finalAmount) {
+      bill.amountPaid = bill.finalAmount;
+      bill.paymentStatus = 'Paid';
+    }
+
+    await bill.save();
+    res.json(bill);
+  } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -122,9 +183,27 @@ router.post('/', auth, async (req, res) => {
 // DELETE /api/billing/:id
 router.delete('/:id', auth, async (req, res) => {
   try {
+    const bill = await Billing.findById(req.params.id);
+    if (!bill) return res.status(404).json({ message: 'Bill not found' });
+
+    // Reverse stock deduction
+    const billDate = new Date(bill.date);
+    const dayStart = new Date(billDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(billDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const prodRecord = await Production.findOne({ date: { $gte: dayStart, $lte: dayEnd } });
+    if (prodRecord) {
+      prodRecord.sold = Math.max(0, prodRecord.sold - bill.bricks);
+      await prodRecord.save();
+      await syncStock();
+    }
+
     await Billing.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Bill deleted' });
+    res.json({ message: 'Bill deleted and stock reversed' });
   } catch (err) {
+    console.error('Delete bill error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
