@@ -311,6 +311,7 @@
               <option>Maintenance</option>
               <option>Petrol</option>
               <option>Diesel</option>
+              <option>Loan</option>
               <option>Miscellaneous</option>
             </select>
           </div>
@@ -632,6 +633,7 @@
               <option>Maintenance</option>
               <option>Petrol</option>
               <option>Diesel</option>
+              <option>Loan</option>
               <option>Miscellaneous</option>
             </select>
           </div>
@@ -768,7 +770,19 @@
   </div>
 
   <!-- Bill View Modal -->
-  ... (kept as is) ...
+  <div class="modal-overlay hidden" id="billViewModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Bill Details</h3>
+        <button onclick="closeModal('billViewModal')">✕</button>
+      </div>
+      <div id="billViewContent" class="bill-print-area"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal('billViewModal')">Close</button>
+        <button class="btn-primary" onclick="printBill()">🖨️ Print Bill</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Payment Update Modal -->
   <div class="modal-overlay hidden" id="paymentModal">

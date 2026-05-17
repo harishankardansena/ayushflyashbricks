@@ -1651,10 +1651,12 @@ document.getElementById('attendanceLoggerForm').addEventListener('submit', async
     document.querySelectorAll('#attLogBody tr').forEach(tr => {
         const status = tr.querySelector('.att-status-select').value;
         if (status !== '') {
+            const otVal = tr.querySelector('.att-ot-input').value;
+            const overtimeHours = parseFloat(otVal) || 0;
             entries.push({
                 workerId: tr.dataset.workerId,
                 status: status,
-                overtimeHours: ot
+                overtimeHours: overtimeHours
             });
         }
     });
@@ -1665,6 +1667,9 @@ document.getElementById('attendanceLoggerForm').addEventListener('submit', async
             showToast('Attendance records saved', 'success');
             closeModal('attendanceLoggerModal');
             loadAttendanceReport();
+        } else {
+            const d = await res.json();
+            showToast(d.message || 'Failed to save attendance', 'error');
         }
     } catch { showToast('Error saving attendance', 'error'); }
 });
