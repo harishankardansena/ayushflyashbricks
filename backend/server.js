@@ -24,6 +24,7 @@ app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/billing', require('./routes/billing'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api/cashbook', require('./routes/cashbook'));
 
 // Health check (use /api/health instead of / to avoid conflict with static files)
 app.get('/api/health', (req, res) => {

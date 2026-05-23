@@ -46,8 +46,6 @@ router.get('/', auth, async (req, res) => {
       dateString: g._id
     }));
 
-    console.log(`[Production] Found ${finalRecords.length} grouped days for filter:`, JSON.stringify(filter));
-
     res.json({ 
       records: finalRecords, 
       total: totalDays[0]?.count || 0, 

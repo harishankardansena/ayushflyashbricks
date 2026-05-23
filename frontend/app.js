@@ -201,7 +201,8 @@ function navigateTo(page, filter) {
     expenses: 'Expense Tracker',
     billing: 'Billing System',
     attendance: 'Attendance & Wages',
-    reports: 'Monthly Reports'
+    reports: 'Monthly Reports',
+    cashbook: 'Cashbook & Dues'
   };
   document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -228,6 +229,9 @@ function navigateTo(page, filter) {
     } else {
       loadBilling();
     }
+  }
+  else if (page === 'cashbook') {
+    loadCashbook();
   }
 }
 
@@ -1882,3 +1886,74 @@ document.getElementById('adjustmentForm').addEventListener('submit', async (e) =
         showToast('Server error', 'error');
     }
 });
+
+// ============================================================
+// CASHBOOK
+// ============================================================
+async function loadCashbook() {
+  try {
+    const res = await apiFetch('/cashbook/dues');
+    const data = await res.json();
+    const container = document.getElementById('cashbookBody');
+    const totalOutstandingEl = document.getElementById('cashbookTotalOutstanding');
+
+    let grandTotal = 0;
+
+    if (!data || data.length === 0) {
+      container.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📒</div>No pending dues found.</div>`;
+      totalOutstandingEl.textContent = '₹0';
+      return;
+    }
+
+    container.innerHTML = data.map(customer => {
+      grandTotal += customer.totalDue;
+      
+      const billsDetail = customer.bills.map(b => 
+        `<div class="cashbook-bill-item">
+           <div class="cashbook-bill-info">
+             <strong>#${b.billNumber}</strong>
+             <small>${formatDate(b.date)}</small>
+           </div>
+           <div class="cashbook-bill-amt">₹${fmtMoney(b.dueAmount)}</div>
+         </div>`
+      ).join('');
+
+      // Prepare WhatsApp message
+      const greeting = `Hello ${customer.name}, this is a gentle reminder that an amount of Rs ${fmtMoney(customer.totalDue)} is pending for your account at Ayush Fly Ash Bricks.`;
+      const billsText = customer.bills.map(b => `- Date: ${formatDate(b.date)}, Bill No: ${b.billNumber}, Pending: Rs ${fmtMoney(b.dueAmount)}`).join('\\n');
+      const closing = `Please arrange the payment at your earliest convenience.`;
+      const msgText = encodeURIComponent(`${greeting}\n\nYour pending bills:\n${billsText}\n\n${closing}`);
+
+      return `
+        <div class="cashbook-card">
+          <div class="cashbook-card-header">
+            <div>
+              <div class="cashbook-customer-name">${customer.name}</div>
+              <div class="cashbook-customer-phone">📞 ${customer.phone}</div>
+            </div>
+            <div>
+              <div class="cashbook-total-due">₹${fmtMoney(customer.totalDue)}</div>
+              <div class="cashbook-due-label">Total Due</div>
+            </div>
+          </div>
+          <div class="cashbook-bills-list">
+            ${billsDetail}
+          </div>
+          <div class="cashbook-actions">
+            <a href="tel:${customer.phone}" class="btn-call">
+              <span style="font-size:1.2rem">📞</span> Call
+            </a>
+            <a href="https://wa.me/91${customer.phone}?text=${msgText}" target="_blank" class="btn-whatsapp">
+              <span style="font-size:1.2rem">💬</span> WhatsApp
+            </a>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    totalOutstandingEl.textContent = `₹${fmtMoney(grandTotal)}`;
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to load cashbook data', 'error');
+  }
+}

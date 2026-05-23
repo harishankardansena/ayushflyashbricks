@@ -18,7 +18,10 @@ router.get('/', auth, async (req, res) => {
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
     // Today's production
-    const todayProduction = await Production.findOne({ date: { $gte: today, $lte: todayEnd } });
+    const todayProduction = await Production.aggregate([
+      { $match: { date: { $gte: today, $lte: todayEnd } } },
+      { $group: { _id: null, totalProduced: { $sum: '$produced' } } }
+    ]);
 
     // Latest stock (absolute most recent production entry)
     const latestProduction = await Production.findOne().sort({ date: -1, createdAt: -1 });
@@ -67,11 +70,13 @@ router.get('/', auth, async (req, res) => {
       const dEnd = new Date(d);
       dEnd.setHours(23, 59, 59, 999);
       d.setHours(0, 0, 0, 0);
-      const prod = await Production.findOne({ date: { $gte: d, $lte: dEnd } });
+      const prods = await Production.find({ date: { $gte: d, $lte: dEnd } });
+      const dailyProduced = prods.reduce((sum, p) => sum + (p.produced || 0), 0);
+      const dailySold = prods.reduce((sum, p) => sum + (p.sold || 0), 0);
       last7Days.push({
         date: d.toISOString().split('T')[0],
-        produced: prod ? prod.produced : 0,
-        sold: prod ? prod.sold : 0
+        produced: dailyProduced,
+        sold: dailySold
       });
     }
 
@@ -87,9 +92,11 @@ router.get('/', auth, async (req, res) => {
     const tb = todayBilling[0] || { totalBricks: 0, totalRevenue: 0 };
     const te = todayExpenses[0] || { total: 0 };
 
+    const tp = todayProduction[0] || { totalProduced: 0 };
+
     res.json({
       today: {
-        produced: todayProduction ? todayProduction.produced : 0,
+        produced: tp.totalProduced,
         sold: tb.totalBricks,
         expenses: te.total,
         revenue: tb.totalRevenue

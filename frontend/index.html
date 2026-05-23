@@ -91,6 +91,9 @@
         <a href="#" class="nav-item" data-page="attendance" onclick="navigateTo('attendance')">
           <span class="nav-icon">👥</span><span class="nav-label">Attendance</span>
         </a>
+        <a href="#" class="nav-item" data-page="cashbook" onclick="navigateTo('cashbook')">
+          <span class="nav-icon">📒</span><span class="nav-label">Cashbook</span>
+        </a>
         <a href="#" class="nav-item" data-page="reports" onclick="navigateTo('reports')">
           <span class="nav-icon">📥</span><span class="nav-label">Reports</span>
         </a>
@@ -424,6 +427,23 @@
           <!-- Monthly calendar cards (one per worker) -->
           <div id="attCalendarView" class="hidden"></div>
 
+        </div>
+
+        <!-- CASHBOOK -->
+        <div id="page-cashbook" class="page hidden">
+          <div class="page-header">
+            <h2>Cashbook & Dues</h2>
+            <p>Track customer pending amounts and send WhatsApp reminders</p>
+          </div>
+          <div class="billing-totals" id="cashbookTotals">
+            <div class="total-card" style="--card-color: var(--danger)">
+              <div class="total-label">Total Outstanding Dues</div>
+              <div class="total-value" id="cashbookTotalOutstanding">₹0</div>
+            </div>
+          </div>
+          <div class="cashbook-grid" id="cashbookBody">
+            <!-- Cards will be dynamically injected here -->
+          </div>
         </div>
 
         <!-- REPORTS -->
