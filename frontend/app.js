@@ -50,7 +50,7 @@ function populateYearSelects() {
   });
 
   // Months
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const monthSelects = ['prodMonth', 'expMonth', 'billMonth', 'usageMonth', 'attMonth'];
   monthSelects.forEach(id => {
     const el = document.getElementById(id);
@@ -70,11 +70,11 @@ function setCurrentMonthFilters() {
   const now = new Date();
   const m = now.getMonth() + 1;
   const y = now.getFullYear();
-  ['prodMonth','expMonth','billMonth'].forEach(id => {
+  ['prodMonth', 'expMonth', 'billMonth'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = m;
   });
-  ['prodYear','expYear','billYear'].forEach(id => {
+  ['prodYear', 'expYear', 'billYear'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = y;
   });
@@ -89,7 +89,7 @@ function setCurrentMonthFilters() {
 
 function setDefaultDates() {
   const today = new Date().toISOString().split('T')[0];
-  ['prodDate','expDate','billDate'].forEach(id => {
+  ['prodDate', 'expDate', 'billDate'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = today;
   });
@@ -202,7 +202,8 @@ function navigateTo(page, filter) {
     billing: 'Billing System',
     attendance: 'Attendance & Wages',
     reports: 'Monthly Reports',
-    cashbook: 'Cashbook & Dues'
+    cashbook: 'Cashbook & Dues',
+    employees: 'Employee Management'
   };
   document.getElementById('pageTitle').textContent = titles[page] || page;
 
@@ -232,6 +233,9 @@ function navigateTo(page, filter) {
   }
   else if (page === 'cashbook') {
     loadCashbook();
+  }
+  else if (page === 'employees') {
+    if (typeof loadEmployees === 'function') loadEmployees();
   }
 }
 
@@ -375,7 +379,7 @@ function renderExpenseChart(data) {
   const ctx = document.getElementById('expenseChart').getContext('2d');
   if (expenseChart) expenseChart.destroy();
   if (!data || data.length === 0) return;
-  const colors = ['#6c63ff','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6'];
+  const colors = ['#6c63ff', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6'];
   expenseChart = new Chart(ctx, {
     type: 'doughnut',
     data: {
@@ -435,10 +439,10 @@ async function loadProduction(page = 1) {
       // Backend sorts by createdAt desc, so logs[0] is latest
       const latestLog = day.logs[0];
       const earliestLog = day.logs[day.logs.length - 1];
-      
+
       const detailRows = day.logs.map(r => `
         <tr>
-          <td style="padding-left: 2.5rem;"><span class="detail-badge">Log</span> ${new Date(r.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+          <td style="padding-left: 2.5rem;"><span class="detail-badge">Log</span> ${new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
           <td>${fmt(r.previousStock)}</td>
           <td><span style="color:var(--primary)">${fmt(r.produced)}</span></td>
           <td><span style="color:var(--success)">${fmt(r.sold)}</span></td>
@@ -447,7 +451,7 @@ async function loadProduction(page = 1) {
           <td style="font-size:0.75rem">${r.notes || '—'}</td>
           <td>
             <div class="action-btns">
-              <button class="btn-icon edit" onclick="editProduction('${r._id}','${r.date}',${r.produced},${r.sold},'${r.notes||''}',${r.adjustment||0})">✏️</button>
+              <button class="btn-icon edit" onclick="editProduction('${r._id}','${r.date}',${r.produced},${r.sold},'${r.notes || ''}',${r.adjustment || 0})">✏️</button>
               <button class="btn-icon delete" onclick="deleteRecord('${r._id}','production','productionBody')">🗑️</button>
             </div>
           </td>
@@ -581,7 +585,7 @@ async function loadInventory() {
               ➕ Add
             </button>
             <button class="btn-secondary" style="flex:1; font-size:0.8rem" 
-              onclick="editInventory('${item._id}','${item.material}',${item.quantity},'${item.unit}',${item.minimumLevel},'${item.notes||''}')">
+              onclick="editInventory('${item._id}','${item.material}',${item.quantity},'${item.unit}',${item.minimumLevel},'${item.notes || ''}')">
               ✏️ Edit
             </button>
             ${item.material === 'Cement' ? `<button class="btn-icon view" onclick="openInventoryDailyDetail('Cement', 'used')" title="View Monthly Usage">📅</button>` : ''}
@@ -638,11 +642,11 @@ async function loadUsage(page = 1) {
   const month = document.getElementById('usageMonth').value;
   const year = document.getElementById('usageYear').value;
   const material = document.getElementById('usageMaterial').value;
-  
+
   let url = `/inventory/usage?page=${page}&limit=10`;
   if (month) url += `&month=${month}`;
   if (year) url += `&year=${year}`;
-  
+
   try {
     const res = await apiFetch(url);
     const data = await res.json();
@@ -693,7 +697,7 @@ async function populateUsageMaterials() {
       select.appendChild(opt);
     });
     select.value = currentVal;
-  } catch {}
+  } catch { }
 }
 
 document.getElementById('usageForm').addEventListener('submit', async (e) => {
@@ -755,12 +759,18 @@ function openModal(id) {
   if (id === 'workerModal') {
     loadWorkers();
   }
+  if (id === 'employeeModal') {
+    if (!document.getElementById('empEditId').value) {
+      document.getElementById('empModalTitle').textContent = 'Add Employee';
+      document.getElementById('employeeForm').reset();
+    }
+  }
 }
 
 function closeModal(id) {
   document.getElementById(id).classList.add('hidden');
   // Clear edit IDs
-  ['prodEditId','invEditId','expEditId'].forEach(eid => {
+  ['prodEditId', 'invEditId', 'expEditId', 'empEditId'].forEach(eid => {
     const el = document.getElementById(eid);
     if (el) el.value = '';
   });
@@ -950,7 +960,7 @@ async function loadBilling(page = 1, filterDate = '') {
       const statusClass = `status-${b.paymentStatus.toLowerCase()}`;
       const balance = (b.finalAmount || 0) - (b.amountPaid || 0);
       const settleBtn = b.paymentStatus !== 'Paid' ? `<button class="btn-icon edit" onclick='openPaymentModal(${JSON.stringify(b)})' title="Settle Payment">💰</button>` : '';
-      
+
       return `
         <tr>
           <td><strong style="color:var(--primary)">${b.billNumber}</strong></td>
@@ -1025,7 +1035,7 @@ async function viewBill(id) {
           <div class="bp-company">Ayush Fly Ash Bricks</div>
           <div class="bp-subtitle">Official Sales Invoice</div>
           <div class="bp-billno">Bill No: ${b.billNumber}</div>
-          <div style="font-size:0.8rem; color:var(--text3); margin-top:0.25rem">Date: ${new Date(b.date).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })}</div>
+          <div style="font-size:0.8rem; color:var(--text3); margin-top:0.25rem">Date: ${new Date(b.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
         </div>
         <div class="bp-grid">
           <div>
@@ -1125,9 +1135,9 @@ async function downloadReport() {
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     a.href = url;
-    a.download = `FlyAshBricks_${months[month-1]}_${year}.xlsx`;
+    a.download = `FlyAshBricks_${months[month - 1]}_${year}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
     showToast('Report downloaded successfully! 📊', 'success');
@@ -1138,7 +1148,7 @@ async function downloadReport() {
 // DELETE CONFIRM
 // ============================================================
 function deleteRecord(id, type, refreshTarget) {
-  document.getElementById('confirmMessage').textContent = `Are you sure you want to delete this ${type.replace('y','y')} record? This action cannot be undone.`;
+  document.getElementById('confirmMessage').textContent = `Are you sure you want to delete this ${type.replace('y', 'y')} record? This action cannot be undone.`;
   openModal('confirmModal');
   confirmCallback = async () => {
     try {
@@ -1214,7 +1224,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) {
       overlay.classList.add('hidden');
-      ['prodEditId','invEditId','expEditId'].forEach(id => {
+      ['prodEditId', 'invEditId', 'expEditId'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
@@ -1238,107 +1248,110 @@ let attendanceView = 'weekly'; // 'weekly' or 'monthly'
 let weekOffset = 0; // 0 = current week, -1 = last week, +1 = next week
 
 async function loadAttendance() {
-    weekOffset = 0;
-    switchAttView(attendanceView);
+  weekOffset = 0;
+  switchAttView(attendanceView);
 }
 
 function shiftWeek(dir) {
-    weekOffset += dir;
-    loadAttendanceReport();
+  weekOffset += dir;
+  loadAttendanceReport();
 }
 
 function switchAttView(view) {
-    attendanceView = view;
-    document.getElementById('btnWeekly').classList.toggle('active', view === 'weekly');
-    document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
+  attendanceView = view;
+  document.getElementById('btnWeekly').classList.toggle('active', view === 'weekly');
+  document.getElementById('btnMonthly').classList.toggle('active', view === 'monthly');
 
-    const weeklyNav = document.getElementById('weeklyNav');
-    const monSel = document.getElementById('attMonth');
-    const yrSel  = document.getElementById('attYear');
+  const weeklyNav = document.getElementById('weeklyNav');
+  const monSel = document.getElementById('attMonth');
+  const yrSel = document.getElementById('attYear');
 
-    if (view === 'weekly') {
-        weeklyNav.style.display = 'flex';
-        monSel.classList.add('hidden');
-        yrSel.classList.add('hidden');
-    } else {
-        weeklyNav.style.display = 'none';
-        monSel.classList.remove('hidden');
-        yrSel.classList.remove('hidden');
-    }
-    loadAttendanceReport();
+  if (view === 'weekly') {
+    weeklyNav.style.display = 'flex';
+    monSel.classList.add('hidden');
+    yrSel.classList.add('hidden');
+  } else {
+    weeklyNav.style.display = 'none';
+    monSel.classList.remove('hidden');
+    yrSel.classList.remove('hidden');
+  }
+  loadAttendanceReport();
 }
 
 async function loadAttendanceReport() {
-    const month    = document.getElementById('attMonth').value;
-    const year     = document.getElementById('attYear').value;
-    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const month = document.getElementById('attMonth').value;
+  const year = document.getElementById('attYear').value;
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    let start, end, dates = [];
+  let start, end, dates = [];
 
-    if (attendanceView === 'weekly') {
-        const today = new Date();
-        const dow = today.getDay(); // 0=Sun
-        const saturday = new Date(today);
-        saturday.setDate(today.getDate() - ((dow + 1) % 7) + (weekOffset * 7));
-        saturday.setHours(0,0,0,0);
-        for (let i = 0; i < 7; i++) {
-            const d = new Date(saturday);
-            d.setDate(saturday.getDate() + i);
-            dates.push(d);
-        }
-        start = dates[0].toISOString();
-        const endD = new Date(dates[6]); endD.setHours(23,59,59,999);
-        end = endD.toISOString();
-        document.getElementById('weeklyDateRange').textContent =
-            `${formatDate(start)} — ${formatDate(end)}`;
-    } else {
-        const y = parseInt(year) || new Date().getFullYear();
-        const m = parseInt(month) || new Date().getMonth() + 1;
-        const firstDay = new Date(y, m - 1, 1);
-        const lastDay  = new Date(y, m, 0);
-        for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-            dates.push(new Date(d));
-        }
-        start = firstDay.toISOString();
-        const endD = new Date(lastDay); endD.setHours(23,59,59,999);
-        end = endD.toISOString();
+  if (attendanceView === 'weekly') {
+    const today = new Date();
+    const dow = today.getDay(); // 0=Sun
+    const saturday = new Date(today);
+    saturday.setDate(today.getDate() - ((dow + 1) % 7) + (weekOffset * 7));
+    saturday.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(saturday);
+      d.setDate(saturday.getDate() + i);
+      dates.push(d);
     }
+    start = dates[0].toISOString();
+    const endD = new Date(dates[6]); endD.setHours(23, 59, 59, 999);
+    end = endD.toISOString();
+    document.getElementById('weeklyDateRange').textContent =
+      `${formatDate(start)} — ${formatDate(end)}`;
+  } else {
+    const y = parseInt(year) || new Date().getFullYear();
+    const m = parseInt(month) || new Date().getMonth() + 1;
+    const firstDay = new Date(y, m - 1, 1);
+    const lastDay = new Date(y, m, 0);
+    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      dates.push(new Date(d));
+    }
+    start = firstDay.toISOString();
+    const endD = new Date(lastDay); endD.setHours(23, 59, 59, 999);
+    end = endD.toISOString();
+  }
 
-    try {
-        const [reportRes, workersRes, statsRes] = await Promise.all([
-            apiFetch(`/attendance/report?start=${start}&end=${end}`),
-            apiFetch('/attendance'),
-            apiFetch(`/attendance/stats?start=${start}&end=${end}`)
-        ]);
+  try {
+    const [reportRes, workersRes, statsRes] = await Promise.all([
+      apiFetch(`/attendance/report?start=${start}&end=${end}`),
+      apiFetch('/employees'), // Fetch all employees, not just active ones
+      apiFetch(`/attendance/stats?start=${start}&end=${end}`)
+    ]);
 
-        // Safe-parse: fallback to [] if any response is not ok or not an array
-        const parseArr = async (res) => {
-            if (!res.ok) return [];
-            try { const d = await res.json(); return Array.isArray(d) ? d : []; }
-            catch { return []; }
-        };
-        const records = await parseArr(reportRes);
-        const workers = await parseArr(workersRes);
-        const stats   = await parseArr(statsRes);
+    // Safe-parse: fallback to [] if any response is not ok or not an array
+    const parseArr = async (res) => {
+      if (!res.ok) return [];
+      try { const d = await res.json(); return Array.isArray(d) ? d : []; }
+      catch { return []; }
+    };
+    const records = await parseArr(reportRes);
+    let allWorkers = await parseArr(workersRes);
+    const stats = await parseArr(statsRes);
 
-        // Build lookup: workerId -> dateStr -> status
-        const lookup = {};
-        records.forEach(r => {
-            if (!r.worker) return; // skip orphaned records (deleted worker)
-            const wid = (r.worker._id || r.worker).toString();
-            const ds  = new Date(r.date).toDateString();
-            if (!lookup[wid]) lookup[wid] = {};
-            lookup[wid][ds] = r.status;
-        });
+    // Build lookup: workerId -> dateStr -> status
+    const lookup = {};
+    records.forEach(r => {
+      if (!r.worker) return; // skip orphaned records
+      const wid = (r.worker._id || r.worker).toString();
+      const ds = new Date(r.date).toDateString();
+      if (!lookup[wid]) lookup[wid] = {};
+      lookup[wid][ds] = r.status;
+    });
 
-        // Stats map for wages
-        const statsMap = {};
-        stats.forEach(s => { statsMap[s._id.toString()] = s; });
+    // Only show workers who are Active OR have an attendance record in this period
+    const workers = allWorkers.filter(w => w.status === 'Active' || lookup[w._id.toString()]);
 
-        // Summary
-        const totalWages = stats.reduce((a, s) => a + s.totalWages, 0);
-        const totalOT    = stats.reduce((a, s) => a + s.totalOvertime, 0);
-        document.getElementById('attendanceSummaryGrid').innerHTML = `
+    // Stats map for wages
+    const statsMap = {};
+    stats.forEach(s => { statsMap[s._id.toString()] = s; });
+
+    // Summary
+    const totalWages = stats.reduce((a, s) => a + s.totalWages, 0);
+    const totalOT = stats.reduce((a, s) => a + s.totalOvertime, 0);
+    document.getElementById('attendanceSummaryGrid').innerHTML = `
             <div class="att-sum-card">
                 <div class="att-sum-label">TOTAL WORKERS</div>
                 <div class="att-sum-value">${workers.length}</div>
@@ -1353,95 +1366,95 @@ async function loadAttendanceReport() {
             </div>
         `;
 
-        if (workers.length === 0) {
-            document.getElementById('attTableContainer').classList.add('hidden');
-            document.getElementById('attCalendarView').classList.remove('hidden');
-            document.getElementById('attCalendarView').innerHTML = '<div class="empty-state">No workers added yet.</div>';
-            return;
-        }
+    if (workers.length === 0) {
+      document.getElementById('attTableContainer').classList.add('hidden');
+      document.getElementById('attCalendarView').classList.remove('hidden');
+      document.getElementById('attCalendarView').innerHTML = '<div class="empty-state">No workers added yet.</div>';
+      return;
+    }
 
-        // ── WEEKLY: 1×7 block matrix ──────────────────────────────
-        if (attendanceView === 'weekly') {
-            document.getElementById('attTableContainer').classList.remove('hidden');
-            document.getElementById('attCalendarView').classList.add('hidden');
+    // ── WEEKLY: 1×7 block matrix ──────────────────────────────
+    if (attendanceView === 'weekly') {
+      document.getElementById('attTableContainer').classList.remove('hidden');
+      document.getElementById('attCalendarView').classList.add('hidden');
 
-            document.getElementById('attTableHead').innerHTML =
-                `<th style="min-width:150px">Worker</th>` +
-                dates.map(d => `<th class="att-day-cell">${dayNames[d.getDay()]}<br><small>${d.getDate()}</small></th>`).join('') +
-                `<th>Total Wage</th>`;
+      document.getElementById('attTableHead').innerHTML =
+        `<th style="min-width:150px">Worker</th>` +
+        dates.map(d => `<th class="att-day-cell">${dayNames[d.getDay()]}<br><small>${d.getDate()}</small></th>`).join('') +
+        `<th>Total Wage</th>`;
 
-            document.getElementById('attTableBody').innerHTML = workers.map(w => {
-                const wid = w._id.toString();
-                const cells = dates.map(d => {
-                    const status = lookup[wid]?.[d.toDateString()];
-                    return cellBlock(status, d);
-                }).join('');
-                const ws = statsMap[wid];
-                return `<tr>
-                    <td><strong>${w.name}</strong><br><small style="color:var(--text3)">${w.category} · ₹${w.dailyWage}/d</small></td>
+      document.getElementById('attTableBody').innerHTML = workers.map(w => {
+        const wid = w._id.toString();
+        const cells = dates.map(d => {
+          const status = lookup[wid]?.[d.toDateString()];
+          return cellBlock(status, d);
+        }).join('');
+        const ws = statsMap[wid];
+        return `<tr>
+                    <td><strong>${w.name}</strong><br><small style="color:var(--text3)">${w.jobTitle || 'N/A'} · ₹${Math.round((w.salary || 0) / 30)}/d</small></td>
                     ${cells}
                     <td><strong style="color:var(--success)">₹${fmtMoney(ws?.totalWages || 0)}</strong></td>
                 </tr>`;
-            }).join('');
-        }
+      }).join('');
+    }
 
-        // ── MONTHLY: Calendar card per worker ─────────────────────
-        else {
-            document.getElementById('attTableContainer').classList.add('hidden');
-            document.getElementById('attCalendarView').classList.remove('hidden');
+    // ── MONTHLY: Calendar card per worker ─────────────────────
+    else {
+      document.getElementById('attTableContainer').classList.add('hidden');
+      document.getElementById('attCalendarView').classList.remove('hidden');
 
-            const firstDow  = (dates[0].getDay() + 1) % 7; // Sat=0..Fri=6
-            const totalCells = firstDow + dates.length;
-            const numWeeks   = Math.ceil(totalCells / 7);
-            const todayStr   = new Date().toDateString();
+      const firstDow = (dates[0].getDay() + 1) % 7; // Sat=0..Fri=6
+      const totalCells = firstDow + dates.length;
+      const numWeeks = Math.ceil(totalCells / 7);
+      const todayStr = new Date().toDateString();
 
-            const calHTML = workers.map(w => {
-                const wid = w._id.toString();
-                const ws  = statsMap[wid];
+      const calHTML = workers.map(w => {
+        const wid = w._id.toString();
+        const ws = statsMap[wid];
 
-                // Build week rows
-                let rows = '';
-                for (let week = 0; week < numWeeks; week++) {
-                    let cells = '';
-                    for (let day = 0; day < 7; day++) {
-                        const pos      = week * 7 + day;
-                        const dateIdx  = pos - firstDow;
+        // Build week rows
+        let rows = '';
+        for (let week = 0; week < numWeeks; week++) {
+          let cells = '';
+          for (let day = 0; day < 7; day++) {
+            const pos = week * 7 + day;
+            const dateIdx = pos - firstDow;
 
-                        if (dateIdx < 0 || dateIdx >= dates.length) {
-                            cells += `<td class="att-cal-cell empty"></td>`;
-                        } else {
-                            const d       = dates[dateIdx];
-                            const status  = lookup[wid]?.[d.toDateString()];
-                            const isToday = d.toDateString() === todayStr;
-                            const isFuture= d > new Date() && !isToday;
+            if (dateIdx < 0 || dateIdx >= dates.length) {
+              cells += `<td class="att-cal-cell empty"></td>`;
+            } else {
+              const d = dates[dateIdx];
+              const status = lookup[wid]?.[d.toDateString()];
+              const isToday = d.toDateString() === todayStr;
+              const isFuture = d > new Date() && !isToday;
 
-                            let cls = 'att-cal-cell';
-                            if (status === 'Present')  cls += ' att-present';
-                            else if (status === 'Absent')   cls += ' att-absent';
-                            else if (status === 'Half-Day') cls += ' att-half';
-                            else cls += ' att-norecord';
-                            if (isToday)  cls += ' att-today';
-                            if (isFuture) cls += ' att-future';
+              let cls = 'att-cal-cell';
+              if (status === 'Present') cls += ' att-present';
+              else if (status === 'Absent') cls += ' att-absent';
+              else if (status === 'Half-Day') cls += ' att-half';
+              else cls += ' att-norecord';
+              if (isToday) cls += ' att-today';
+              if (isFuture) cls += ' att-future';
 
-                            const statusLabel = status === 'Half-Day' ? 'Half' : (status || '');
-                            cells += `<td class="${cls}" title="${statusLabel || 'No record'} · ${d.toLocaleDateString('en-IN')}">
+              const statusLabel = status === 'Half-Day' ? 'Half' : (status || '');
+              cells += `<td class="${cls}" title="${statusLabel || 'No record'} · ${d.toLocaleDateString('en-IN')}">
                                 <div class="att-date-num">${d.getDate()}</div>
                                 ${statusLabel ? `<div class="att-status-label">${statusLabel}</div>` : ''}
                             </td>`;
-                        }
-                    }
-                    rows += `<tr>
+            }
+          }
+          rows += `<tr>
                         <td class="week-label">Week ${week + 1}</td>
                         ${cells}
                     </tr>`;
-                }
+        }
 
-                return `<div class="worker-cal-card">
+        return `<div class="worker-cal-card">
                     <div class="worker-cal-header">
                         <div style="display:flex;align-items:center;gap:0.75rem;">
                             <strong style="font-size:1rem">${w.name}</strong>
-                            <span class="cat-badge cat-${w.category.toLowerCase()}">${w.category}</span>
-                            <small style="color:var(--text3)">₹${w.dailyWage}/day</small>
+                            <span class="cat-badge cat-${(w.jobTitle || 'other').toLowerCase().replace(/\s+/g, '-')}">${w.jobTitle || 'N/A'}</span>
+                            <small style="color:var(--text3)">₹${Math.round((w.salary || 0) / 30)}/day</small>
                         </div>
                         <div style="font-weight:700;color:var(--success);font-size:1rem">
                             Total Wages: ₹${fmtMoney(ws?.totalWages || 0)}
@@ -1452,103 +1465,103 @@ async function loadAttendanceReport() {
                         <thead>
                             <tr>
                                 <th style="min-width:60px;text-align:left;padding-left:0.875rem;"></th>
-                                ${['Sat','Sun','Mon','Tue','Wed','Thu','Fri'].map(d => `<th>${d}</th>`).join('')}
+                                ${['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(d => `<th>${d}</th>`).join('')}
                             </tr>
                         </thead>
                         <tbody>${rows}</tbody>
                     </table>
                     </div>
                 </div>`;
-            }).join('');
+      }).join('');
 
-            document.getElementById('attCalendarView').innerHTML = calHTML || '<div class="empty-state">No attendance records for this month.</div>';
-        }
-
-    } catch (err) {
-        console.error(err);
-        showToast('Failed to load attendance report', 'error');
+      document.getElementById('attCalendarView').innerHTML = calHTML || '<div class="empty-state">No attendance records for this month.</div>';
     }
+
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to load attendance report', 'error');
+  }
 }
 
 async function exportAttendance() {
-    const month = document.getElementById('attMonth').value;
-    const year  = document.getElementById('attYear').value;
-    let start, end;
+  const month = document.getElementById('attMonth').value;
+  const year = document.getElementById('attYear').value;
+  let start, end;
 
-    if (attendanceView === 'weekly') {
-        const today = new Date();
-        const dow = today.getDay();
-        const saturday = new Date(today);
-        saturday.setDate(today.getDate() - ((dow + 1) % 7) + (weekOffset * 7));
-        saturday.setHours(0,0,0,0);
-        const friday = new Date(saturday);
-        friday.setDate(saturday.getDate() + 6);
-        friday.setHours(23,59,59,999);
-        start = saturday.toISOString();
-        end = friday.toISOString();
-    } else {
-        const y = parseInt(year) || new Date().getFullYear();
-        const m = parseInt(month) || new Date().getMonth() + 1;
-        const firstDay = new Date(y, m - 1, 1);
-        const lastDay  = new Date(y, m, 0);
-        lastDay.setHours(23,59,59,999);
-        start = firstDay.toISOString();
-        end = lastDay.toISOString();
-    }
+  if (attendanceView === 'weekly') {
+    const today = new Date();
+    const dow = today.getDay();
+    const saturday = new Date(today);
+    saturday.setDate(today.getDate() - ((dow + 1) % 7) + (weekOffset * 7));
+    saturday.setHours(0, 0, 0, 0);
+    const friday = new Date(saturday);
+    friday.setDate(saturday.getDate() + 6);
+    friday.setHours(23, 59, 59, 999);
+    start = saturday.toISOString();
+    end = friday.toISOString();
+  } else {
+    const y = parseInt(year) || new Date().getFullYear();
+    const m = parseInt(month) || new Date().getMonth() + 1;
+    const firstDay = new Date(y, m - 1, 1);
+    const lastDay = new Date(y, m, 0);
+    lastDay.setHours(23, 59, 59, 999);
+    start = firstDay.toISOString();
+    end = lastDay.toISOString();
+  }
 
-    try {
-        showToast('Generating Excel report...', 'info');
-        const res = await apiFetch(`/attendance/excel?start=${start}&end=${end}`);
-        if (!res.ok) throw new Error('Export failed');
-        
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const rangeStr = attendanceView === 'weekly' ? 'Weekly' : 'Monthly';
-        a.download = `Attendance_Report_${rangeStr}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        showToast('Excel report downloaded!', 'success');
-    } catch (err) {
-        console.error(err);
-        showToast('Failed to export Excel report', 'error');
-    }
+  try {
+    showToast('Generating Excel report...', 'info');
+    const res = await apiFetch(`/attendance/excel?start=${start}&end=${end}`);
+    if (!res.ok) throw new Error('Export failed');
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const rangeStr = attendanceView === 'weekly' ? 'Weekly' : 'Monthly';
+    a.download = `Attendance_Report_${rangeStr}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    showToast('Excel report downloaded!', 'success');
+  } catch (err) {
+    console.error(err);
+    showToast('Failed to export Excel report', 'error');
+  }
 }
 
 // Helper: renders a single attendance block cell
 function cellBlock(status, dateObj, showDate = false) {
-    const today    = new Date().toDateString();
-    const isFuture = dateObj > new Date() && dateObj.toDateString() !== today;
-    let bg = 'var(--surface3)', color = 'var(--text3)', title = 'No record';
-    if (status === 'Present')  { bg = 'rgba(16,185,129,0.3)'; color = 'var(--success)'; title = 'Present'; }
-    if (status === 'Absent')   { bg = 'rgba(239,68,68,0.3)';  color = 'var(--danger)';  title = 'Absent'; }
-    if (status === 'Half-Day') { bg = 'rgba(245,158,11,0.3)'; color = 'var(--warning)'; title = 'Half-Day'; }
-    if (isFuture) { bg = 'transparent'; color = 'var(--surface3)'; title = ''; }
-    const todayOutline = dateObj.toDateString() === today ? 'box-shadow:0 0 0 2px var(--primary);' : '';
-    
-    // Weekly block: show P/A/H label
-    // Monthly block: show date number with color-coded background
-    const inner = showDate
-        ? `<div style="font-size:0.65rem;font-weight:800;line-height:1">${dateObj.getDate()}</div>
-           <div style="font-size:0.6rem;font-weight:600;opacity:0.85">${status ? status[0] : ''}</div>`
-        : `<div style="font-size:0.75rem;font-weight:800">${status ? status[0] : '–'}</div>`;
+  const today = new Date().toDateString();
+  const isFuture = dateObj > new Date() && dateObj.toDateString() !== today;
+  let bg = 'var(--surface3)', color = 'var(--text3)', title = 'No record';
+  if (status === 'Present') { bg = 'rgba(16,185,129,0.3)'; color = 'var(--success)'; title = 'Present'; }
+  if (status === 'Absent') { bg = 'rgba(239,68,68,0.3)'; color = 'var(--danger)'; title = 'Absent'; }
+  if (status === 'Half-Day') { bg = 'rgba(245,158,11,0.3)'; color = 'var(--warning)'; title = 'Half-Day'; }
+  if (isFuture) { bg = 'transparent'; color = 'var(--surface3)'; title = ''; }
+  const todayOutline = dateObj.toDateString() === today ? 'box-shadow:0 0 0 2px var(--primary);' : '';
 
-    return `<td class="att-day-cell" title="${title}${title ? ' · ' : ''}${dateObj.toLocaleDateString('en-IN')}">
-        <div style="width:${showDate?40:32}px;height:${showDate?40:32}px;border-radius:8px;background:${bg};color:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;margin:auto;${todayOutline}">${inner}</div>
+  // Weekly block: show P/A/H label
+  // Monthly block: show date number with color-coded background
+  const inner = showDate
+    ? `<div style="font-size:0.65rem;font-weight:800;line-height:1">${dateObj.getDate()}</div>
+           <div style="font-size:0.6rem;font-weight:600;opacity:0.85">${status ? status[0] : ''}</div>`
+    : `<div style="font-size:0.75rem;font-weight:800">${status ? status[0] : '–'}</div>`;
+
+  return `<td class="att-day-cell" title="${title}${title ? ' · ' : ''}${dateObj.toLocaleDateString('en-IN')}">
+        <div style="width:${showDate ? 40 : 32}px;height:${showDate ? 40 : 32}px;border-radius:8px;background:${bg};color:${color};display:flex;flex-direction:column;align-items:center;justify-content:center;margin:auto;${todayOutline}">${inner}</div>
     </td>`;
 }
 
 
 // === WORKER MANAGEMENT ===
 async function loadWorkers() {
-    try {
-        const res = await apiFetch('/attendance');
-        const workers = await res.json();
-        const body = document.getElementById('workerListBody');
-        body.innerHTML = workers.map(w => `
+  try {
+    const res = await apiFetch('/attendance');
+    const workers = await res.json();
+    const body = document.getElementById('workerListBody');
+    body.innerHTML = workers.map(w => `
             <tr>
                 <td><strong>${w.name}</strong><br><small>${w.phone || ''}</small></td>
                 <td>${w.category}</td>
@@ -1561,77 +1574,77 @@ async function loadWorkers() {
                 </td>
             </tr>
         `).join('');
-    } catch { }
+  } catch { }
 }
 
 document.getElementById('workerForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('workerEditId').value;
-    const payload = {
-        name: document.getElementById('workerName').value,
-        dailyWage: parseFloat(document.getElementById('workerWage').value),
-        phone: document.getElementById('workerPhone').value,
-        address: document.getElementById('workerAddress').value,
-        aadharNumber: document.getElementById('workerAadhar').value,
-        category: document.getElementById('workerCat').value
-    };
-    try {
-        const res = id 
-            ? await apiFetch(`/attendance/worker/${id}`, 'PUT', payload)
-            : await apiFetch('/attendance', 'POST', payload);
-            
-        if (res.ok) {
-            showToast(id ? 'Worker updated successfully' : 'Worker added successfully', 'success');
-            document.getElementById('workerForm').reset();
-            document.getElementById('workerEditId').value = '';
-            loadWorkers();
-        } else {
-            const d = await res.json();
-            showToast(d.message || 'Failed to save worker', 'error');
-        }
-    } catch { showToast('Error saving worker', 'error'); }
+  e.preventDefault();
+  const id = document.getElementById('workerEditId').value;
+  const payload = {
+    name: document.getElementById('workerName').value,
+    dailyWage: parseFloat(document.getElementById('workerWage').value),
+    phone: document.getElementById('workerPhone').value,
+    address: document.getElementById('workerAddress').value,
+    aadharNumber: document.getElementById('workerAadhar').value,
+    category: document.getElementById('workerCat').value
+  };
+  try {
+    const res = id
+      ? await apiFetch(`/attendance/worker/${id}`, 'PUT', payload)
+      : await apiFetch('/attendance', 'POST', payload);
+
+    if (res.ok) {
+      showToast(id ? 'Worker updated successfully' : 'Worker added successfully', 'success');
+      document.getElementById('workerForm').reset();
+      document.getElementById('workerEditId').value = '';
+      loadWorkers();
+    } else {
+      const d = await res.json();
+      showToast(d.message || 'Failed to save worker', 'error');
+    }
+  } catch { showToast('Error saving worker', 'error'); }
 });
 
 function editWorker(id, name, wage, phone, category, address, aadhar) {
-    document.getElementById('workerEditId').value = id;
-    document.getElementById('workerName').value = name;
-    document.getElementById('workerWage').value = wage;
-    document.getElementById('workerPhone').value = phone;
-    document.getElementById('workerCat').value = category;
-    document.getElementById('workerAddress').value = address;
-    document.getElementById('workerAadhar').value = aadhar;
+  document.getElementById('workerEditId').value = id;
+  document.getElementById('workerName').value = name;
+  document.getElementById('workerWage').value = wage;
+  document.getElementById('workerPhone').value = phone;
+  document.getElementById('workerCat').value = category;
+  document.getElementById('workerAddress').value = address;
+  document.getElementById('workerAadhar').value = aadhar;
 }
 
 async function deleteWorker(id) {
-    if (!confirm('Are you sure you want to remove this worker?\n\nTheir attendance records will be preserved in the database but they will no longer appear in future reports.')) return;
-    try {
-        const res = await apiFetch(`/attendance/worker/${id}`, 'DELETE');
-        if (res.ok) {
-            showToast('Worker removed from active list', 'success');
-            loadWorkers();
-            loadAttendanceReport();
-        } else {
-            const d = await res.json();
-            showToast(d.message || 'Failed to remove worker', 'error');
-        }
-    } catch { showToast('Server error', 'error'); }
+  if (!confirm('Are you sure you want to remove this worker?\n\nTheir attendance records will be preserved in the database but they will no longer appear in future reports.')) return;
+  try {
+    const res = await apiFetch(`/attendance/worker/${id}`, 'DELETE');
+    if (res.ok) {
+      showToast('Worker removed from active list', 'success');
+      loadWorkers();
+      loadAttendanceReport();
+    } else {
+      const d = await res.json();
+      showToast(d.message || 'Failed to remove worker', 'error');
+    }
+  } catch { showToast('Server error', 'error'); }
 }
 
 // === ATTENDANCE LOGGING ===
 async function openAttendanceLogger() {
-    const res = await apiFetch('/attendance');
-    const workers = await res.json();
-    if (workers.length === 0) {
-        showToast('Please add workers first', 'warning');
-        openModal('workerModal');
-        return;
-    }
+  const res = await apiFetch('/attendance');
+  const workers = await res.json();
+  if (workers.length === 0) {
+    showToast('Please add workers first', 'warning');
+    openModal('workerModal');
+    return;
+  }
 
-    document.getElementById('attLogDate').value = new Date().toISOString().split('T')[0];
-    const body = document.getElementById('attLogBody');
-    body.innerHTML = workers.map(w => `
+  document.getElementById('attLogDate').value = new Date().toISOString().split('T')[0];
+  const body = document.getElementById('attLogBody');
+  body.innerHTML = workers.map(w => `
         <tr data-worker-id="${w._id}">
-            <td><strong>${w.name}</strong><br><small>₹${w.dailyWage}/day</small></td>
+            <td><strong>${w.name}</strong><br><small>₹${Math.round((w.salary || 0) / 30)}/day</small></td>
             <td>
                 <select class="att-status-select">
                     <option value="">-- Select --</option>
@@ -1645,37 +1658,37 @@ async function openAttendanceLogger() {
             </td>
         </tr>
     `).join('');
-    openModal('attendanceLoggerModal');
+  openModal('attendanceLoggerModal');
 }
 
 document.getElementById('attendanceLoggerForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const date = document.getElementById('attLogDate').value;
-    const entries = [];
-    document.querySelectorAll('#attLogBody tr').forEach(tr => {
-        const status = tr.querySelector('.att-status-select').value;
-        if (status !== '') {
-            const otVal = tr.querySelector('.att-ot-input').value;
-            const overtimeHours = parseFloat(otVal) || 0;
-            entries.push({
-                workerId: tr.dataset.workerId,
-                status: status,
-                overtimeHours: overtimeHours
-            });
-        }
-    });
+  e.preventDefault();
+  const date = document.getElementById('attLogDate').value;
+  const entries = [];
+  document.querySelectorAll('#attLogBody tr').forEach(tr => {
+    const status = tr.querySelector('.att-status-select').value;
+    if (status !== '') {
+      const otVal = tr.querySelector('.att-ot-input').value;
+      const overtimeHours = parseFloat(otVal) || 0;
+      entries.push({
+        workerId: tr.dataset.workerId,
+        status: status,
+        overtimeHours: overtimeHours
+      });
+    }
+  });
 
-    try {
-        const res = await apiFetch('/attendance/bulk', 'POST', { date, entries });
-        if (res.ok) {
-            showToast('Attendance records saved', 'success');
-            closeModal('attendanceLoggerModal');
-            loadAttendanceReport();
-        } else {
-            const d = await res.json();
-            showToast(d.message || 'Failed to save attendance', 'error');
-        }
-    } catch { showToast('Error saving attendance', 'error'); }
+  try {
+    const res = await apiFetch('/attendance/bulk', 'POST', { date, entries });
+    if (res.ok) {
+      showToast('Attendance records saved', 'success');
+      closeModal('attendanceLoggerModal');
+      loadAttendanceReport();
+    } else {
+      const d = await res.json();
+      showToast(d.message || 'Failed to save attendance', 'error');
+    }
+  } catch { showToast('Error saving attendance', 'error'); }
 });
 
 // Payment Settlement Logic
@@ -1687,204 +1700,204 @@ function togglePartialField() {
 
 let currentPayBill = null;
 function openPaymentModal(bill) {
-    currentPayBill = bill;
-    document.getElementById('payBillId').value = bill._id;
-    document.getElementById('payBillNo').textContent = bill.billNumber;
-    document.getElementById('payTotal').textContent = `₹${fmtMoney(bill.finalAmount)}`;
-    document.getElementById('payAlready').textContent = `₹${fmtMoney(bill.amountPaid || 0)}`;
-    const balance = bill.finalAmount - (bill.amountPaid || 0);
-    document.getElementById('payBalance').textContent = `₹${fmtMoney(balance)}`;
-    document.getElementById('payNewTotal').value = bill.amountPaid || 0;
-    openModal('paymentModal');
+  currentPayBill = bill;
+  document.getElementById('payBillId').value = bill._id;
+  document.getElementById('payBillNo').textContent = bill.billNumber;
+  document.getElementById('payTotal').textContent = `₹${fmtMoney(bill.finalAmount)}`;
+  document.getElementById('payAlready').textContent = `₹${fmtMoney(bill.amountPaid || 0)}`;
+  const balance = bill.finalAmount - (bill.amountPaid || 0);
+  document.getElementById('payBalance').textContent = `₹${fmtMoney(balance)}`;
+  document.getElementById('payNewTotal').value = bill.amountPaid || 0;
+  openModal('paymentModal');
 }
 
 function settleFull() {
-    if (currentPayBill) {
-        document.getElementById('payNewTotal').value = currentPayBill.finalAmount;
-    }
+  if (currentPayBill) {
+    document.getElementById('payNewTotal').value = currentPayBill.finalAmount;
+  }
 }
 
 document.getElementById('paymentForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('payBillId').value;
-    const newTotalPaid = parseFloat(document.getElementById('payNewTotal').value);
+  e.preventDefault();
+  const id = document.getElementById('payBillId').value;
+  const newTotalPaid = parseFloat(document.getElementById('payNewTotal').value);
 
-    if (newTotalPaid < (currentPayBill?.amountPaid || 0)) {
-        if (!confirm('New paid amount is less than previously recorded. Are you sure?')) return;
+  if (newTotalPaid < (currentPayBill?.amountPaid || 0)) {
+    if (!confirm('New paid amount is less than previously recorded. Are you sure?')) return;
+  }
+
+  try {
+    const res = await apiFetch(`/billing/${id}/payment`, 'PATCH', {
+      amountPaid: newTotalPaid,
+      paymentStatus: newTotalPaid >= currentPayBill.finalAmount ? 'Paid' : 'Partial'
+    });
+
+    if (res.ok) {
+      showToast('Payment updated successfully', 'success');
+      closeModal('paymentModal');
+      loadBilling(billCurrentPage);
+      if (currentPage === 'dashboard') loadDashboard();
+    } else {
+      const d = await res.json();
+      showToast(d.message || 'Failed to update payment', 'error');
     }
-
-    try {
-        const res = await apiFetch(`/billing/${id}/payment`, 'PATCH', { 
-            amountPaid: newTotalPaid,
-            paymentStatus: newTotalPaid >= currentPayBill.finalAmount ? 'Paid' : 'Partial'
-        });
-
-        if (res.ok) {
-            showToast('Payment updated successfully', 'success');
-            closeModal('paymentModal');
-            loadBilling(billCurrentPage);
-            if (currentPage === 'dashboard') loadDashboard();
-        } else {
-            const d = await res.json();
-            showToast(d.message || 'Failed to update payment', 'error');
-        }
-    } catch { showToast('Server error', 'error'); }
+  } catch { showToast('Server error', 'error'); }
 });
 
 // Inventory Summary (Received vs Used)
 async function loadInventorySummary() {
-    try {
-        const now = new Date();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-        const res = await apiFetch(`/inventory/monthly-summary?month=${month}&year=${year}`);
-        const data = await res.json();
-        
-        const used = data.used || [];
-        const received = data.received || [];
-
-        const findQty = (arr, mat) => {
-            const found = arr.find(m => m._id === mat);
-            return found ? found.total : 0;
-        };
-
-        // Update UI
-        if (document.getElementById('cementReceived')) document.getElementById('cementReceived').textContent = fmt(findQty(received, 'Cement'));
-        if (document.getElementById('cementUsed')) document.getElementById('cementUsed').textContent = fmt(findQty(used, 'Cement'));
-        if (document.getElementById('bedReceived')) document.getElementById('bedReceived').textContent = fmt(findQty(received, 'Bed Material'));
-        if (document.getElementById('bedUsed')) document.getElementById('bedUsed').textContent = fmt(findQty(used, 'Bed Material'));
-        
-    } catch (err) { console.error('Summary load error:', err); }
-}
-
-async function openInventoryDailyDetail(material, type) {
+  try {
     const now = new Date();
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
-    const monthName = now.toLocaleString('default', { month: 'long' });
-    
-    if (document.getElementById('invCalendarMat')) document.getElementById('invCalendarMat').textContent = material;
-    if (document.getElementById('invCalendarType')) document.getElementById('invCalendarType').textContent = type.charAt(0).toUpperCase() + type.slice(1);
-    if (document.getElementById('invCalendarMonth')) document.getElementById('invCalendarMonth').textContent = `${monthName} ${year}`;
-    
-    const grid = document.getElementById('cementCalendarGrid');
-    if (grid) grid.innerHTML = '<div style="grid-column:1/-1; padding:2rem; text-align:center;">Loading...</div>';
-    openModal('cementCalendarModal');
+    const res = await apiFetch(`/inventory/monthly-summary?month=${month}&year=${year}`);
+    const data = await res.json();
 
-    try {
-        const res = await apiFetch(`/inventory/daily-usage?material=${encodeURIComponent(material)}&month=${month}&year=${year}&type=${type}`);
-        const dailyData = await res.json();
-        
-        // Create a map of day -> quantity
-        const usageMap = {};
-        dailyData.forEach(d => { usageMap[d._id] = d.totalQty; });
+    const used = data.used || [];
+    const received = data.received || [];
 
-        const firstDay = new Date(year, month - 1, 1).getDay(); // 0=Sun
-        const startOffset = firstDay === 0 ? 6 : firstDay - 1; // Mon=0
-        const daysInMonth = new Date(year, month, 0).getDate();
-        let gridHtml = '';
-        const totalCells = (startOffset + daysInMonth) > 35 ? 42 : 35;
+    const findQty = (arr, mat) => {
+      const found = arr.find(m => m._id === mat);
+      return found ? found.total : 0;
+    };
 
-        for (let i = 0; i < totalCells; i++) {
-            const dayNum = i - startOffset + 1;
-            if (dayNum > 0 && dayNum <= daysInMonth) {
-                const qty = usageMap[dayNum] || 0;
-                gridHtml += `
+    // Update UI
+    if (document.getElementById('cementReceived')) document.getElementById('cementReceived').textContent = fmt(findQty(received, 'Cement'));
+    if (document.getElementById('cementUsed')) document.getElementById('cementUsed').textContent = fmt(findQty(used, 'Cement'));
+    if (document.getElementById('bedReceived')) document.getElementById('bedReceived').textContent = fmt(findQty(received, 'Bed Material'));
+    if (document.getElementById('bedUsed')) document.getElementById('bedUsed').textContent = fmt(findQty(used, 'Bed Material'));
+
+  } catch (err) { console.error('Summary load error:', err); }
+}
+
+async function openInventoryDailyDetail(material, type) {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const year = now.getFullYear();
+  const monthName = now.toLocaleString('default', { month: 'long' });
+
+  if (document.getElementById('invCalendarMat')) document.getElementById('invCalendarMat').textContent = material;
+  if (document.getElementById('invCalendarType')) document.getElementById('invCalendarType').textContent = type.charAt(0).toUpperCase() + type.slice(1);
+  if (document.getElementById('invCalendarMonth')) document.getElementById('invCalendarMonth').textContent = `${monthName} ${year}`;
+
+  const grid = document.getElementById('cementCalendarGrid');
+  if (grid) grid.innerHTML = '<div style="grid-column:1/-1; padding:2rem; text-align:center;">Loading...</div>';
+  openModal('cementCalendarModal');
+
+  try {
+    const res = await apiFetch(`/inventory/daily-usage?material=${encodeURIComponent(material)}&month=${month}&year=${year}&type=${type}`);
+    const dailyData = await res.json();
+
+    // Create a map of day -> quantity
+    const usageMap = {};
+    dailyData.forEach(d => { usageMap[d._id] = d.totalQty; });
+
+    const firstDay = new Date(year, month - 1, 1).getDay(); // 0=Sun
+    const startOffset = firstDay === 0 ? 6 : firstDay - 1; // Mon=0
+    const daysInMonth = new Date(year, month, 0).getDate();
+    let gridHtml = '';
+    const totalCells = (startOffset + daysInMonth) > 35 ? 42 : 35;
+
+    for (let i = 0; i < totalCells; i++) {
+      const dayNum = i - startOffset + 1;
+      if (dayNum > 0 && dayNum <= daysInMonth) {
+        const qty = usageMap[dayNum] || 0;
+        gridHtml += `
                     <div style="background:var(--surface2); border-radius:8px; padding:8px; min-height:60px; display:flex; flex-direction:column; justify-content:space-between; border:1px solid var(--surface3)">
                         <div style="font-size:0.75rem; font-weight:700; color:var(--text3); text-align:left">${dayNum}</div>
                         <div style="font-size:0.9rem; font-weight:800; color:${qty > 0 ? 'var(--primary)' : 'var(--text3)'}">${qty > 0 ? fmt(qty) : '-'}</div>
                     </div>
                 `;
-            } else {
-                gridHtml += `<div style="background:transparent; border-radius:8px; padding:8px; min-height:60px;"></div>`;
-            }
-        }
-        if (grid) grid.innerHTML = gridHtml;
-    } catch (err) {
-        console.error(err);
-        if (grid) grid.innerHTML = '<div style="grid-column:1/-1; padding:2rem; text-align:center; color:var(--danger);">Error loading data</div>';
+      } else {
+        gridHtml += `<div style="background:transparent; border-radius:8px; padding:8px; min-height:60px;"></div>`;
+      }
     }
+    if (grid) grid.innerHTML = gridHtml;
+  } catch (err) {
+    console.error(err);
+    if (grid) grid.innerHTML = '<div style="grid-column:1/-1; padding:2rem; text-align:center; color:var(--danger);">Error loading data</div>';
+  }
 }
 
 // Quick Restock Logic
 function openRestockModal(id, material, unit) {
-    document.getElementById('restockInvId').value = id;
-    document.getElementById('restockMatName').textContent = material;
-    document.getElementById('restockUnit').textContent = unit;
-    document.getElementById('restockQty').value = '';
-    document.getElementById('restockNotes').value = '';
-    openModal('restockModal');
+  document.getElementById('restockInvId').value = id;
+  document.getElementById('restockMatName').textContent = material;
+  document.getElementById('restockUnit').textContent = unit;
+  document.getElementById('restockQty').value = '';
+  document.getElementById('restockNotes').value = '';
+  openModal('restockModal');
 }
 
 document.getElementById('restockForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('restockInvId').value;
-    const quantity = parseFloat(document.getElementById('restockQty').value);
-    const notes = document.getElementById('restockNotes').value;
+  e.preventDefault();
+  const id = document.getElementById('restockInvId').value;
+  const quantity = parseFloat(document.getElementById('restockQty').value);
+  const notes = document.getElementById('restockNotes').value;
 
-    try {
-        const res = await apiFetch(`/inventory/${id}/restock`, 'POST', { quantity, notes });
-        const data = await res.json();
-        if (res.ok) {
-            showToast(data.message, 'success');
-            closeModal('restockModal');
-            loadInventory();
-            if (currentPage === 'dashboard') loadDashboard();
-        } else {
-            showToast(data.message || 'Failed to add stock', 'error');
-        }
-    } catch { showToast('Server error', 'error'); }
+  try {
+    const res = await apiFetch(`/inventory/${id}/restock`, 'POST', { quantity, notes });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message, 'success');
+      closeModal('restockModal');
+      loadInventory();
+      if (currentPage === 'dashboard') loadDashboard();
+    } else {
+      showToast(data.message || 'Failed to add stock', 'error');
+    }
+  } catch { showToast('Server error', 'error'); }
 });
 // Hidden Stock Adjustment Logic
 let bellClickCount = 0;
 let bellClickTimer = null;
 
 function handleBellClick() {
-    bellClickCount++;
-    if (bellClickTimer) clearTimeout(bellClickTimer);
-    
-    if (bellClickCount === 3) {
-        bellClickCount = 0;
-        openAdjustmentModal();
-    } else {
-        bellClickTimer = setTimeout(() => {
-            bellClickCount = 0;
-        }, 1000); // 1 second window for 3 clicks
-        toggleNotifPanel();
-    }
+  bellClickCount++;
+  if (bellClickTimer) clearTimeout(bellClickTimer);
+
+  if (bellClickCount === 3) {
+    bellClickCount = 0;
+    openAdjustmentModal();
+  } else {
+    bellClickTimer = setTimeout(() => {
+      bellClickCount = 0;
+    }, 1000); // 1 second window for 3 clicks
+    toggleNotifPanel();
+  }
 }
 
 function openAdjustmentModal() {
-    document.getElementById('adjustmentForm').reset();
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('adjDate').value = today;
-    document.getElementById('adjustmentModal').classList.remove('hidden');
+  document.getElementById('adjustmentForm').reset();
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('adjDate').value = today;
+  document.getElementById('adjustmentModal').classList.remove('hidden');
 }
 
 document.getElementById('adjustmentForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = {
-        date: document.getElementById('adjDate').value,
-        produced: 0,
-        sold: 0,
-        adjustment: parseInt(document.getElementById('adjAmount').value),
-        notes: document.getElementById('adjNotes').value || 'Manual hidden adjustment'
-    };
+  e.preventDefault();
+  const payload = {
+    date: document.getElementById('adjDate').value,
+    produced: 0,
+    sold: 0,
+    adjustment: parseInt(document.getElementById('adjAmount').value),
+    notes: document.getElementById('adjNotes').value || 'Manual hidden adjustment'
+  };
 
-    try {
-        const res = await apiFetch('/production', 'POST', payload);
-        if (res.ok) {
-            showToast('Stock adjusted successfully!', 'success');
-            closeModal('adjustmentModal');
-            if (currentPage === 'dashboard') loadDashboard();
-            if (currentPage === 'production') loadProduction();
-        } else {
-            const data = await res.json();
-            showToast(data.message || 'Failed to adjust stock', 'error');
-        }
-    } catch {
-        showToast('Server error', 'error');
+  try {
+    const res = await apiFetch('/production', 'POST', payload);
+    if (res.ok) {
+      showToast('Stock adjusted successfully!', 'success');
+      closeModal('adjustmentModal');
+      if (currentPage === 'dashboard') loadDashboard();
+      if (currentPage === 'production') loadProduction();
+    } else {
+      const data = await res.json();
+      showToast(data.message || 'Failed to adjust stock', 'error');
     }
+  } catch {
+    showToast('Server error', 'error');
+  }
 });
 
 // ============================================================
@@ -1907,8 +1920,8 @@ async function loadCashbook() {
 
     container.innerHTML = data.map(customer => {
       grandTotal += customer.totalDue;
-      
-      const billsDetail = customer.bills.map(b => 
+
+      const billsDetail = customer.bills.map(b =>
         `<div class="cashbook-bill-item">
            <div class="cashbook-bill-info">
              <strong>#${b.billNumber}</strong>

@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const attendanceSchema = new mongoose.Schema({
-  worker: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker', required: true },
+  worker: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', required: true },
   date: { type: Date, required: true },
   status: { type: String, enum: ['Present', 'Absent', 'Half-Day'], default: 'Present' },
   overtimeHours: { type: Number, default: 0 },

@@ -1,22 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const Worker = require('../models/Worker');
+const Employee = require('../models/Employee');
 const Attendance = require('../models/Attendance');
 
 // === ATTENDANCE SPECIFIC ROUTES (must come BEFORE /:id routes) ===
 
-// Get attendance for a specific date range (active workers only)
+// Get attendance for a specific date range
 router.get('/report', auth, async (req, res) => {
   try {
     const { start, end } = req.query;
-    // Get only active worker IDs
-    const activeWorkers = await Worker.find({ isActive: true }).select('_id');
-    const activeIds = activeWorkers.map(w => w._id);
     const records = await Attendance.find({
-      date: { $gte: new Date(start), $lte: new Date(end) },
-      worker: { $in: activeIds }   // only active worker records
-    }).populate('worker', 'name dailyWage category');
+      date: { $gte: new Date(start), $lte: new Date(end) }
+    }).populate('worker', 'name salary jobTitle');
     res.json(records);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
@@ -30,21 +26,22 @@ router.post('/bulk', auth, async (req, res) => {
     const results = [];
 
     for (const entry of entries) {
-      const worker = await Worker.findById(entry.workerId);
+      const worker = await Employee.findById(entry.workerId);
       if (!worker) continue;
 
       let multiplier = 1;
       if (entry.status === 'Absent')   multiplier = 0;
       if (entry.status === 'Half-Day') multiplier = 0.5;
 
-      const wageEarned = (worker.dailyWage * multiplier) + ((entry.overtimeHours || 0) * (worker.dailyWage / 8));
+      const dailyWage = (worker.salary || 0) / 30;
+      const wageEarned = (dailyWage * multiplier) + ((entry.overtimeHours || 0) * (dailyWage / 8));
 
       const record = await Attendance.findOneAndUpdate(
         { worker: entry.workerId, date: new Date(date) },
-        { 
-          status: entry.status, 
-          overtimeHours: entry.overtimeHours || 0, 
-          wageEarned 
+        {
+          status: entry.status,
+          overtimeHours: entry.overtimeHours || 0,
+          wageEarned
         },
         { upsert: true, new: true }
       );
@@ -63,18 +60,19 @@ router.get('/stats', auth, async (req, res) => {
     const { start, end } = req.query;
     const stats = await Attendance.aggregate([
       { $match: { date: { $gte: new Date(start), $lte: new Date(end) } } },
-      { $group: {
+      {
+        $group: {
           _id: '$worker',
-          daysPresent:   { $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] } },
-          daysHalf:      { $sum: { $cond: [{ $eq: ['$status', 'Half-Day'] }, 1, 0] } },
-          totalWages:    { $sum: '$wageEarned' },
+          daysPresent: { $sum: { $cond: [{ $eq: ['$status', 'Present'] }, 1, 0] } },
+          daysHalf: { $sum: { $cond: [{ $eq: ['$status', 'Half-Day'] }, 1, 0] } },
+          totalWages: { $sum: '$wageEarned' },
           totalOvertime: { $sum: '$overtimeHours' }
         }
       },
       // Only join with ACTIVE workers — soft-deleted workers are excluded
-      { $lookup: { from: 'workers', localField: '_id', foreignField: '_id', as: 'workerInfo' } },
+      { $lookup: { from: 'employees', localField: '_id', foreignField: '_id', as: 'workerInfo' } },
       { $unwind: '$workerInfo' },
-      { $match: { 'workerInfo.isActive': true } }   // ← exclude deactivated workers
+      { $match: { 'workerInfo.status': 'Active' } }   // ← exclude deactivated workers
     ]);
     res.json(stats);
   } catch (err) {
@@ -92,28 +90,32 @@ router.get('/excel', auth, async (req, res) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
 
-    // Get active workers
-    const workers = await Worker.find({ isActive: true }).sort({ name: 1 });
+    // Get active workers OR workers who have records
+    const allWorkers = await Employee.find().sort({ name: 1 });
     
     // Get attendance records
     const records = await Attendance.find({
       date: { $gte: startDate, $lte: endDate }
     });
 
+    const activeOrHasRecord = new Set(records.map(r => r.worker.toString()));
+    const workers = allWorkers.filter(w => w.status === 'Active' || activeOrHasRecord.has(w._id.toString()));
+
     // Get stats for wages
     const stats = await Attendance.aggregate([
       { $match: { date: { $gte: startDate, $lte: endDate } } },
-      { $group: {
+      {
+        $group: {
           _id: '$worker',
           totalWages: { $sum: '$wageEarned' }
         }
       }
     ]);
     const statsMap = {};
-    stats.forEach(s => { 
+    stats.forEach(s => {
       statsMap[s._id.toString()] = {
         totalWages: s.totalWages
-      }; 
+      };
     });
 
     // Build date list
@@ -127,7 +129,7 @@ router.get('/excel', auth, async (req, res) => {
     const lookup = {};
     records.forEach(r => {
       const wid = r.worker.toString();
-      const ds  = new Date(r.date).toDateString();
+      const ds = new Date(r.date).toDateString();
       if (!lookup[wid]) lookup[wid] = {};
       lookup[wid][ds] = r.status;
     });
@@ -139,7 +141,7 @@ router.get('/excel', auth, async (req, res) => {
         'Category': w.category,
         'Daily Wage': w.dailyWage
       };
-      
+
       dates.forEach(d => {
         const ds = d.toDateString();
         const header = `${d.getDate()}/${d.getMonth() + 1}`;
@@ -153,7 +155,7 @@ router.get('/excel', auth, async (req, res) => {
 
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.json_to_sheet(excelData);
-    
+
     // Column widths
     const cols = [{ wch: 18 }, { wch: 12 }, { wch: 10 }];
     dates.forEach(() => cols.push({ wch: 6 }));
@@ -180,41 +182,80 @@ router.get('/excel', auth, async (req, res) => {
 // Get all active workers
 router.get('/', auth, async (req, res) => {
   try {
-    const workers = await Worker.find({ isActive: true }).sort({ name: 1 });
+    const workers = await Employee.find({ status: 'Active' }).sort({ name: 1 });
     res.json(workers);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Add new worker
+// Add new worker (mapped to Employee)
 router.post('/', auth, async (req, res) => {
   try {
-    const worker = new Worker(req.body);
+    const { name, dailyWage, phone, address, aadharNumber, category } = req.body;
+    
+    // Auto-generate employeeId
+    const date = new Date();
+    const yy = String(date.getFullYear()).slice(-2);
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const prefix = `EMP-${yy}${mm}`;
+    const latestEmp = await Employee.findOne({ employeeId: new RegExp(`^${prefix}`) }).sort({ createdAt: -1 });
+    let nextNum = 1;
+    if (latestEmp && latestEmp.employeeId) {
+      const numStr = latestEmp.employeeId.slice(8);
+      if (!isNaN(numStr) && numStr.length > 0) nextNum = parseInt(numStr) + 1;
+    }
+    const employeeId = `${prefix}${String(nextNum).padStart(2, '0')}`;
+
+    const empData = {
+      name,
+      employeeId,
+      jobTitle: category || 'Labour',
+      department: 'Operations',
+      phone,
+      address,
+      aadharNumber,
+      salary: (dailyWage || 0) * 30,
+      status: 'Active',
+      employmentType: 'Full-time'
+    };
+
+    const worker = new Employee(empData);
     await worker.save();
     res.status(201).json(worker);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error saving worker' });
   }
 });
 
-// Update worker
+// Update worker (mapped to Employee)
 router.put('/worker/:id', auth, async (req, res) => {
   try {
-    const worker = await Worker.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const { name, dailyWage, phone, address, aadharNumber, category } = req.body;
+    const updateData = {
+      name,
+      jobTitle: category,
+      phone,
+      address,
+      aadharNumber,
+      salary: (dailyWage || 0) * 30
+    };
+    const worker = await Employee.findByIdAndUpdate(req.params.id, updateData, { new: true });
     if (!worker) return res.status(404).json({ message: 'Worker not found' });
     res.json(worker);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error updating worker' });
   }
 });
 
-// Soft delete worker (isActive: false) — preserves data in DB
+// Soft delete worker (status: Terminated)
 router.delete('/worker/:id', auth, async (req, res) => {
   try {
-    const worker = await Worker.findByIdAndUpdate(
+    const worker = await Employee.findByIdAndUpdate(
       req.params.id,
-      { isActive: false },
+      { status: 'Terminated' },
       { new: true }
     );
     if (!worker) return res.status(404).json({ message: 'Worker not found' });
