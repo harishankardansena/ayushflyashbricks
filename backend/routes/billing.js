@@ -3,6 +3,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Billing = require('../models/Billing');
 const Production = require('../models/Production');
+const OrderRequest = require('../models/OrderRequest');
 const { syncStock } = require('../utils/stockUtils');
 
 // Generate bill number: MM-DD-XX format
@@ -33,6 +34,16 @@ async function generateBillNumber(date) {
   return `${mm}-${dd}-${xx}`;
 }
 
+// GET /api/billing/pending - List pending bill requests
+router.get('/pending', auth, async (req, res) => {
+  try {
+    const bills = await Billing.find({ status: 'Pending Approval' }).sort({ createdAt: -1 }).populate('orderRequestId');
+    res.json(bills);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /api/billing - List with filters
 router.get('/', auth, async (req, res) => {
   try {
@@ -58,10 +69,14 @@ router.get('/', auth, async (req, res) => {
       ];
     }
 
+    // Only show approved bills in main billing list unless specified
+    filter.status = 'Approved';
+
     const total = await Billing.countDocuments(filter);
+    const skip = (parseInt(page) - 1) * parseInt(limit);
     const records = await Billing.find(filter)
       .sort({ date: -1, createdAt: -1 })
-      .skip((page - 1) * limit)
+      .skip(skip)
       .limit(parseInt(limit));
 
     const totalRevenue = await Billing.aggregate([
@@ -92,8 +107,25 @@ router.get('/:id', auth, async (req, res) => {
 // POST /api/billing - Create new bill
 router.post('/', auth, async (req, res) => {
   try {
-    const { customer, bricks, ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate, discount, paymentStatus, amountPaid, notes, date } = req.body;
+    const { customer, bricks, ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate, discount, paymentStatus, amountPaid, notes, date, orderRequestId } = req.body;
     const billDate = date ? new Date(date) : new Date();
+
+    let orderReq = null;
+    if (orderRequestId) {
+      orderReq = await OrderRequest.findById(orderRequestId);
+      if (!orderReq) {
+        return res.status(404).json({ message: 'Order Request not found' });
+      }
+      if (orderReq.status !== 'Accepted') {
+        return res.status(400).json({ message: 'Order Request is not accepted' });
+      }
+      if (orderReq.remainingValue < bricks) {
+        return res.status(400).json({ message: 'Not enough quota left in the Order Request' });
+      }
+    }
+
+    const isEmployee = req.admin && req.admin.role === 'employee';
+    const status = isEmployee ? 'Pending Approval' : 'Approved';
 
     let bill;
     let saved = false;
@@ -108,7 +140,7 @@ router.post('/', auth, async (req, res) => {
         bill = new Billing({
           billNumber, date: billDate, customer, bricks,
           ratePerBrick, workerCharge, transportCharge, gstEnabled, cgstRate, sgstRate,
-          discount, paymentStatus, amountPaid: amountPaid || 0, notes
+          discount, paymentStatus, amountPaid: amountPaid || 0, notes, status, orderRequestId
         });
         await bill.save();
         saved = true;
@@ -119,6 +151,12 @@ router.post('/', auth, async (req, res) => {
         }
         throw err;
       }
+    }
+
+    // Deduct quota if linked to an order request
+    if (orderReq) {
+      orderReq.remainingValue -= bricks;
+      await orderReq.save();
     }
 
     // Reduce stock automatically
@@ -186,18 +224,20 @@ router.delete('/:id', auth, async (req, res) => {
     const bill = await Billing.findById(req.params.id);
     if (!bill) return res.status(404).json({ message: 'Bill not found' });
 
-    // Reverse stock deduction
-    const billDate = new Date(bill.date);
-    const dayStart = new Date(billDate);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(billDate);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    const prodRecord = await Production.findOne({ date: { $gte: dayStart, $lte: dayEnd } });
+    // Reverse stock deduction by deleting the exact production log entry
+    const prodRecord = await Production.findOne({ notes: `Sold: Bill ${bill.billNumber}` });
     if (prodRecord) {
-      prodRecord.sold = Math.max(0, prodRecord.sold - bill.bricks);
-      await prodRecord.save();
+      await Production.findByIdAndDelete(prodRecord._id);
       await syncStock();
+    }
+
+    // Refund the quota to the order request if it was linked
+    if (bill.orderRequestId) {
+      const orderReq = await OrderRequest.findById(bill.orderRequestId);
+      if (orderReq) {
+        orderReq.remainingValue += bill.bricks;
+        await orderReq.save();
+      }
     }
 
     await Billing.findByIdAndDelete(req.params.id);
@@ -209,3 +249,43 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 module.exports = router;
+
+// PUT /api/billing/:id/approve
+router.put('/:id/approve', auth, async (req, res) => {
+  try {
+    const bill = await Billing.findById(req.params.id);
+    if (!bill) return res.status(404).json({ message: 'Bill not found' });
+    if (bill.status !== 'Pending Approval') return res.status(400).json({ message: 'Bill is not pending approval' });
+    
+    bill.status = 'Approved';
+    await bill.save();
+    res.json(bill);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/billing/:id/reject
+router.put('/:id/reject', auth, async (req, res) => {
+  try {
+    const bill = await Billing.findById(req.params.id);
+    if (!bill) return res.status(404).json({ message: 'Bill not found' });
+    if (bill.status !== 'Pending Approval') return res.status(400).json({ message: 'Bill is not pending approval' });
+    
+    bill.status = 'Rejected';
+    await bill.save();
+    
+    // Refund the quota
+    if (bill.orderRequestId) {
+      const orderReq = await OrderRequest.findById(bill.orderRequestId);
+      if (orderReq) {
+        orderReq.remainingValue += bill.bricks;
+        await orderReq.save();
+      }
+    }
+    
+    res.json(bill);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});

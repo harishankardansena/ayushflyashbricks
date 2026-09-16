@@ -17,49 +17,46 @@ router.get('/', auth, async (req, res) => {
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    // Today's production
-    const todayProduction = await Production.aggregate([
-      { $match: { date: { $gte: today, $lte: todayEnd } } },
-      { $group: { _id: null, totalProduced: { $sum: '$produced' } } }
-    ]);
-
-    // Latest stock (absolute most recent production entry)
-    const latestProduction = await Production.findOne().sort({ date: -1, createdAt: -1 });
-
-    // Monthly production totals
-    const monthlyProduction = await Production.aggregate([
-      { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
-      { $group: { _id: null, totalProduced: { $sum: '$produced' }, totalSold: { $sum: '$sold' } } }
+    const [
+      todayProduction,
+      latestProduction,
+      monthlyProduction,
+      monthlyExpenses,
+      todayExpenses,
+      todayBilling,
+      monthlyRevenue,
+      inventory
+    ] = await Promise.all([
+      Production.aggregate([
+        { $match: { date: { $gte: today, $lte: todayEnd } } },
+        { $group: { _id: null, totalProduced: { $sum: '$produced' } } }
+      ]),
+      Production.findOne().sort({ date: -1, createdAt: -1 }),
+      Production.aggregate([
+        { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
+        { $group: { _id: null, totalProduced: { $sum: '$produced' }, totalSold: { $sum: '$sold' } } }
+      ]),
+      Expense.aggregate([
+        { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      Expense.aggregate([
+        { $match: { date: { $gte: today, $lte: todayEnd } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      Billing.aggregate([
+        { $match: { date: { $gte: today, $lte: todayEnd }, status: 'Approved' } },
+        { $group: { _id: null, totalBricks: { $sum: '$bricks' }, totalRevenue: { $sum: '$amountPaid' } } }
+      ]),
+      Billing.aggregate([
+        { $match: { date: { $gte: startOfMonth, $lte: endOfMonth }, status: 'Approved' } },
+        { $group: { _id: null, total: { $sum: '$amountPaid' } } }
+      ]),
+      Inventory.find()
     ]);
 
     console.log(`[Dashboard] Current Stock: ${latestProduction?.currentStock}, Monthly Sold: ${monthlyProduction[0]?.totalSold}`);
 
-    // Monthly expenses
-    const monthlyExpenses = await Expense.aggregate([
-      { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]);
-
-    // Today's expenses
-    const todayExpenses = await Expense.aggregate([
-      { $match: { date: { $gte: today, $lte: todayEnd } } },
-      { $group: { _id: null, total: { $sum: '$amount' } } }
-    ]);
-
-    // Today's bricks sold and revenue (from billing)
-    const todayBilling = await Billing.aggregate([
-      { $match: { date: { $gte: today, $lte: todayEnd } } },
-      { $group: { _id: null, totalBricks: { $sum: '$bricks' }, totalRevenue: { $sum: '$amountPaid' } } }
-    ]);
-
-    // Monthly revenue (from billing)
-    const monthlyRevenue = await Billing.aggregate([
-      { $match: { date: { $gte: startOfMonth, $lte: endOfMonth } } },
-      { $group: { _id: null, total: { $sum: '$amountPaid' } } }
-    ]);
-
-    // Low stock alerts
-    const inventory = await Inventory.find();
     const lowStockAlerts = inventory.filter(item => item.quantity <= item.minimumLevel);
 
     // Production chart data (last 7 days)

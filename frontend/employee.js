@@ -81,6 +81,8 @@ document.getElementById('employeeForm').addEventListener('submit', async (e) => 
   formData.append('department', document.getElementById('empDept').value);
   formData.append('email', document.getElementById('empEmail').value);
   formData.append('phone', document.getElementById('empPhone').value);
+  const pass = document.getElementById('empPassword').value;
+  if (pass) formData.append('password', pass);
   formData.append('dob', document.getElementById('empDob').value);
   formData.append('bloodGroup', document.getElementById('empBlood').value);
   formData.append('aadharNumber', document.getElementById('empAadhar').value);
@@ -213,6 +215,7 @@ function editCurrentEmp() {
   document.getElementById('empDept').value = emp.department || '';
   document.getElementById('empEmail').value = emp.email || '';
   document.getElementById('empPhone').value = emp.phone || '';
+  document.getElementById('empPassword').value = ''; // Reset password field
   document.getElementById('empAadhar').value = emp.aadharNumber || '';
   document.getElementById('empDob').value = emp.dob ? emp.dob.split('T')[0] : '';
   document.getElementById('empBlood').value = emp.bloodGroup || '';

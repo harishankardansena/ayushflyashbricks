@@ -97,6 +97,9 @@
         <a href="#" class="nav-item" data-page="employees" onclick="navigateTo('employees')">
           <span class="nav-icon">🧑</span><span class="nav-label">Employees</span>
         </a>
+        <a href="#" class="nav-item" data-page="requests" onclick="navigateTo('requests'); fetchAdminOrderRequests(); fetchAdminBillRequests(); fetchOverdueRequests();">
+          <span class="nav-icon">📝</span><span class="nav-label">Requests</span>
+        </a>
         <a href="#" class="nav-item" data-page="reports" onclick="navigateTo('reports')">
           <span class="nav-icon">📥</span><span class="nav-label">Reports</span>
         </a>
@@ -160,6 +163,77 @@
 
       <!-- Pages -->
       <div class="page-container">
+        <!-- REQUESTS PAGE -->
+        <div id="page-requests" class="page">
+          <div class="page-header">
+            <h2>Requests</h2>
+            <p>Manage order requests and bill requests</p>
+          </div>
+          
+          <!-- Overdue Notifications Banner -->
+          <div id="overdueBanner" class="alert-banner hidden" style="background: #ffeb3b; color: #b71c1c; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; border-left: 5px solid #d32f2f;">
+            ⚠️ There are overdue 45-day quotas! You cannot accept new Order Requests until they are settled.
+          </div>
+
+          <!-- Tabs -->
+          <div class="tabs" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="btn-primary tab-btn" id="tab-order-reqs" onclick="switchRequestTab('order')">Order Requests</button>
+            <button class="btn-secondary tab-btn" id="tab-bill-reqs" onclick="switchRequestTab('bill')">Bill Requests</button>
+            <button class="btn-secondary tab-btn" id="tab-overdue-reqs" onclick="switchRequestTab('overdue')" style="background: #f44336; color: white;">Overdue (45-Day)</button>
+          </div>
+
+          <!-- Order Requests Tab Content -->
+          <div id="content-order-reqs" class="form-card req-content">
+            <div class="table-container">
+              <table class="data-table" id="adminOrderRequestsTable">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Employee</th>
+                    <th>Requested</th>
+                    <th>Status</th>
+                    <th>Remaining Value</th>
+                    <th>Valid Until</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filled by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Bill Requests Tab Content -->
+          <div id="content-bill-reqs" class="req-content hidden">
+            <div id="adminBillRequestsContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 15px;">
+              <!-- Cards filled by JS -->
+            </div>
+          </div>
+
+          <!-- Overdue Requests Tab Content -->
+          <div id="content-overdue-reqs" class="form-card req-content hidden">
+            <div class="table-container">
+              <table class="data-table" id="adminOverdueRequestsTable">
+                <thead>
+                  <tr>
+                    <th>Order Date</th>
+                    <th>Employee</th>
+                    <th>Remaining Quota</th>
+                    <th>Valid Until</th>
+                    <th>Last Customer Details</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Filled by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
         <!-- DASHBOARD -->
         <div id="page-dashboard" class="page active">
           <div class="page-header">
@@ -1185,6 +1259,9 @@
         </div>
         <div class="form-row">
           <div class="form-group">
+            <label>Password <span style="font-size:0.8rem; color:var(--text3);">(Auto-generated if empty)</span></label>
+            <input type="text" id="empPassword" placeholder="e.g. Hari@3910" />
+          </div>
             <label>Aadhar Number</label>
             <input type="text" id="empAadhar" placeholder="12-digit number" />
           </div>
@@ -1286,6 +1363,9 @@
     </div>
   </div>
 
+  <!-- Global Loader -->
+  <div id="global-loader" class="global-loader-overlay">
+    <div class="global-spinner"></div>
+  </div>
 </body>
-
 </html>

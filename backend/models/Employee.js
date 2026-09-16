@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const employeeSchema = new mongoose.Schema({
   name: { type: String, required: true },
   employeeId: { type: String, required: true, unique: true },
+  password: { type: String }, // Added for secure login
   jobTitle: { type: String, required: true },
   department: { type: String, required: true },
   profilePictureUrl: { type: String },

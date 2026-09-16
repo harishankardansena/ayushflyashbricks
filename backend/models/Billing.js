@@ -20,7 +20,9 @@ const billingSchema = new mongoose.Schema({
   finalAmount: { type: Number },
   paymentStatus: { type: String, enum: ['Paid', 'Pending', 'Partial'], default: 'Paid' },
   amountPaid: { type: Number, default: 0 },
-  notes: { type: String, default: '' }
+  notes: { type: String, default: '' },
+  status: { type: String, enum: ['Pending Approval', 'Approved', 'Rejected'], default: 'Approved' },
+  orderRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'OrderRequest' }
 }, { timestamps: true });
 
 // Auto-calculate totals

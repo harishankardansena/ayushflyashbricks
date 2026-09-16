@@ -1,3 +1,35 @@
+// --- Global Fetch Override for Loading & Locks ---
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const url = args[0];
+  const options = args[1] || {};
+  const method = (options.method || 'GET').toUpperCase();
+  
+  if (['POST', 'PUT', 'DELETE'].includes(method)) {
+    const loader = document.getElementById('global-loader');
+    const btn = document.activeElement;
+    const isButton = btn && (btn.tagName === 'BUTTON' || btn.type === 'submit');
+    
+    if (isButton) {
+      btn.disabled = true;
+      btn.dataset.originalText = btn.innerHTML;
+      btn.innerHTML = 'Processing...';
+    }
+    if (loader) loader.classList.add('active');
+    
+    try {
+      return await originalFetch.apply(this, args);
+    } finally {
+      if (isButton) {
+        btn.disabled = false;
+        btn.innerHTML = btn.dataset.originalText;
+      }
+      if (loader) loader.classList.remove('active');
+    }
+  }
+  return originalFetch.apply(this, args);
+};
+
 /* ============================================================
    FLY ASH BRICKS MANAGEMENT SYSTEM – MAIN JS
    ============================================================ */
@@ -1968,5 +2000,236 @@ async function loadCashbook() {
   } catch (err) {
     console.error(err);
     showToast('Failed to load cashbook data', 'error');
+  }
+}
+
+// ============================================================
+// REQUESTS MODULE (Order & Bill Requests)
+// ============================================================
+
+function switchRequestTab(tabId) {
+  // Hide all contents
+  document.querySelectorAll('.req-content').forEach(el => el.classList.add('hidden'));
+  
+  // Show selected content
+  const target = document.getElementById(`content-${tabId}-reqs`);
+  if (target) target.classList.remove('hidden');
+  
+  // Reset buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-secondary');
+  });
+  
+  // Set active button
+  const activeBtn = document.getElementById(`tab-${tabId}-reqs`);
+  if (activeBtn) {
+    activeBtn.classList.remove('btn-secondary');
+    activeBtn.classList.add('btn-primary');
+    if (tabId === 'overdue') activeBtn.style.color = 'white'; // Retain styling
+  } else {
+    // Reset overdue button color when not active
+    const overdueBtn = document.getElementById('tab-overdue-reqs');
+    if (overdueBtn) overdueBtn.style.color = '';
+  }
+
+  // Fetch relevant data
+  if (tabId === 'order') fetchAdminOrderRequests();
+  else if (tabId === 'bill') fetchAdminBillRequests();
+  else if (tabId === 'overdue') fetchOverdueRequests();
+}
+
+async function fetchAdminOrderRequests() {
+  try {
+    const res = await apiFetch('/orders');
+    if (!res.ok) throw new Error('Failed to fetch order requests');
+    const requests = await res.json();
+    
+    const tbody = document.querySelector('#adminOrderRequestsTable tbody');
+    if (!tbody) return;
+
+    if (requests.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No order requests found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = requests.map(req => {
+      const isAccepted = req.status === 'Accepted';
+      const validUntil = isAccepted && req.validUntil ? formatDate(req.validUntil) : '-';
+      
+      let actionBtns = '';
+      if (req.status === 'Pending') {
+        actionBtns = `
+          <button class="btn-primary" style="padding:4px 8px; font-size:0.8rem; background: var(--success);" onclick="updateOrderRequestStatus('${req._id}', 'Accepted')">Accept</button>
+          <button class="btn-primary" style="padding:4px 8px; font-size:0.8rem; background: var(--danger);" onclick="updateOrderRequestStatus('${req._id}', 'Rejected')">Reject</button>
+        `;
+      }
+      
+      // Always allow editing remaining value for non-rejected requests
+      if (req.status !== 'Rejected') {
+        actionBtns += `
+          <div style="display:flex; gap: 5px; margin-top:5px;">
+            <input type="number" id="remVal-${req._id}" value="${req.remainingValue}" style="width: 70px; padding: 2px 5px;" />
+            <button class="btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="updateOrderRemainingValue('${req._id}')">Save Val</button>
+          </div>
+        `;
+      }
+
+      return `
+        <tr>
+          <td>${formatDate(req.createdAt)}</td>
+          <td>${req.employeeId?.name || 'Unknown'} (${req.employeeId?.employeeId || '-'})</td>
+          <td>${fmt(req.requestedValue)}</td>
+          <td><strong style="color: ${req.status === 'Accepted' ? 'var(--success)' : req.status === 'Rejected' ? 'var(--danger)' : 'var(--warning)'}">${req.status}</strong></td>
+          <td>${fmt(req.remainingValue)}</td>
+          <td>${validUntil}</td>
+          <td>${req.notes || '-'}</td>
+          <td>${actionBtns}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    showToast('Error loading order requests', 'error');
+  }
+}
+
+async function fetchAdminBillRequests() {
+  try {
+    const res = await apiFetch('/billing/pending');
+    if (!res.ok) throw new Error('Failed to fetch bill requests');
+    const bills = await res.json();
+    
+    const container = document.getElementById('adminBillRequestsContainer');
+    if (!container) return;
+
+    if (bills.length === 0) {
+      container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 20px; color: var(--text3);">No bill requests found.</div>';
+      return;
+    }
+
+    container.innerHTML = bills.map(b => {
+      let actions = '';
+      if (b.status === 'Pending Approval') {
+         actions = `
+          <button class="btn-primary btn-full" style="background: var(--success); margin-bottom:5px;" onclick="approveBill('${b._id}')">Approve Bill</button>
+          <button class="btn-primary btn-full" style="background: var(--danger);" onclick="deleteRecord('${b._id}', 'billing', fetchAdminBillRequests)">Reject/Delete</button>
+         `;
+      } else {
+         actions = `<button class="btn-secondary btn-full" onclick="viewBill('${b._id}')">View Bill</button>`;
+      }
+
+      return `
+        <div class="form-card" style="padding: 15px; background: var(--surface2);">
+          <div style="font-weight: bold; margin-bottom: 5px;">Customer: ${b.customer?.name || 'Unknown'}</div>
+          <div style="font-size: 0.9rem; color: var(--text3); margin-bottom: 5px;">Bricks: ${fmt(b.bricks)} | Amt: ₹${fmtMoney(b.finalAmount)}</div>
+          <div style="font-size: 0.8rem; margin-bottom: 10px;">Status: <span style="color: ${b.status === 'Pending Approval' ? 'var(--warning)' : 'var(--success)'}">${b.status}</span></div>
+          ${actions}
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Bill requests fetch error:', err);
+    const container = document.getElementById('adminBillRequestsContainer');
+    if (container) container.innerHTML = '<div style="grid-column: 1/-1; text-align:center; padding: 20px; color: var(--text3);">No bill requests found (API not ready).</div>';
+  }
+}
+
+async function fetchOverdueRequests() {
+  try {
+    const res = await apiFetch('/orders/overdue');
+    if (!res.ok) throw new Error('Failed to fetch overdue requests');
+    const overdue = await res.json();
+    
+    const banner = document.getElementById('overdueBanner');
+    if (banner) {
+      if (overdue.length > 0) banner.classList.remove('hidden');
+      else banner.classList.add('hidden');
+    }
+
+    const tbody = document.querySelector('#adminOverdueRequestsTable tbody');
+    if (!tbody) return;
+
+    if (overdue.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No overdue quotas.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = overdue.map(req => {
+      const cust = req.lastCustomerDetails;
+      const custInfo = cust ? `${cust.name}<br/><span style="font-size:0.8rem; color:var(--text3);">${cust.phone} | ${cust.address}</span>` : 'No recent bills found';
+
+      return `
+        <tr>
+          <td>${formatDate(req.createdAt)}</td>
+          <td>${req.employeeId?.name || 'Unknown'} (${req.employeeId?.employeeId || '-'})</td>
+          <td style="color: var(--danger); font-weight:bold;">${fmt(req.remainingValue)}</td>
+          <td style="color: var(--danger);">${formatDate(req.validUntil)}</td>
+          <td>${custInfo}</td>
+          <td>
+             <button class="btn-primary" style="padding:4px 8px; font-size:0.8rem; background: var(--success); margin-bottom: 5px; width: 100%;" onclick="settleOverdueRequest('${req._id}', 'extend')">Extend (45 Days)</button>
+             <button class="btn-primary" style="padding:4px 8px; font-size:0.8rem; background: var(--warning); width: 100%;" onclick="settleOverdueRequest('${req._id}', 'zero_quota')">Zero Quota (Settle)</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    showToast('Error loading overdue requests', 'error');
+  }
+}
+
+async function updateOrderRequestStatus(id, status) {
+  try {
+    const res = await apiFetch(`/orders/${id}`, 'PUT', { status });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.message || 'Failed to update');
+    }
+    showToast(`Request ${status}`, 'success');
+    fetchAdminOrderRequests();
+    fetchOverdueRequests(); // Refresh banner if needed
+  } catch (err) {
+    showToast(err.message || 'Error updating status', 'error');
+  }
+}
+
+async function updateOrderRemainingValue(id) {
+  const input = document.getElementById(`remVal-${id}`);
+  if (!input) return;
+  const val = Number(input.value);
+  if (val < 0) return showToast('Value cannot be negative', 'error');
+  
+  try {
+    const res = await apiFetch(`/orders/${id}`, 'PUT', { remainingValue: val });
+    if (!res.ok) throw new Error('Failed to update value');
+    showToast('Remaining value updated', 'success');
+    fetchAdminOrderRequests();
+  } catch (err) {
+    showToast(err.message || 'Error updating value', 'error');
+  }
+}
+
+async function settleOverdueRequest(id, action) {
+  if (!confirm(`Are you sure you want to ${action === 'extend' ? 'extend the quota by 45 days' : 'set the remaining quota to 0 and settle it'}?`)) return;
+  try {
+    const res = await apiFetch(`/orders/${id}/settle`, 'PUT', { action });
+    if (!res.ok) throw new Error('Failed to settle request');
+    showToast('Overdue request updated', 'success');
+    fetchOverdueRequests();
+    fetchAdminOrderRequests();
+  } catch (err) {
+    showToast(err.message || 'Error settling request', 'error');
+  }
+}
+
+async function approveBill(billId) {
+  try {
+    const res = await apiFetch(`/billing/${billId}/approve`, 'PUT');
+    if (!res.ok) throw new Error('Failed to approve bill');
+    showToast('Bill Approved successfully', 'success');
+    fetchAdminBillRequests();
+  } catch (err) {
+    showToast(err.message || 'Error approving bill', 'error');
   }
 }

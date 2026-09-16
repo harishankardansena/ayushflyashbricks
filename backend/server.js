@@ -26,6 +26,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/cashbook', require('./routes/cashbook'));
 app.use('/api/employees', require('./routes/employees'));
+app.use('/api/orders', require('./routes/orderRequests'));
 // Health check (use /api/health instead of / to avoid conflict with static files)
 app.get('/api/health', (req, res) => {
   res.json({ message: 'Fly Ash Bricks Management API is running!', status: 'OK' });

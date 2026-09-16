@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Employee Portal - Ayush Fly Ash Bricks</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .btn-danger {
+      background: rgba(244, 67, 54, 0.2);
+      color: #ff5252;
+      border: 1px solid rgba(244, 67, 54, 0.3);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    .btn-danger:hover {
+      background: rgba(244, 67, 54, 0.3);
+    }
+    .emp-sidebar {
+      width: 260px;
+      background: rgba(20, 20, 30, 0.85);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      z-index: 100;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .emp-main {
+      margin-left: 260px;
+      width: calc(100% - 260px);
+      height: 100vh;
+      overflow-y: auto;
+      padding-bottom: 2rem;
+    }
+    @media (max-width: 768px) {
+      .emp-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+      }
+      .emp-sidebar.active {
+        transform: translateX(0);
+      }
+      .emp-main {
+        margin-left: 0;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- LOGIN PAGE -->
+  <div id="empLoginPage" class="login-page">
+    <div class="login-bg">
+      <div class="login-orb orb1"></div>
+      <div class="login-orb orb2"></div>
+      <div class="login-orb orb3"></div>
+    </div>
+    <div class="login-card">
+      <div class="login-logo">
+        <img src="icon.png" alt="Logo" class="login-logo-img" style="width: 60px; height: 60px; margin-bottom: 1rem; filter: drop-shadow(0 0 10px rgba(108,99,255,0.5));" />
+        <h2>Employee Portal</h2>
+        <p>Ayush Fly Ash Bricks</p>
+      </div>
+      <form id="empLoginForm" class="login-form">
+        <div class="form-group">
+          <label>Employee ID</label>
+          <div class="input-wrap">
+            <span class="input-icon">👤</span>
+            <input type="text" id="loginEmpId" placeholder="e.g., EMP-XXXX" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="loginEmpPass" placeholder="Enter password" required />
+          </div>
+        </div>
+        <div id="empLoginError" class="login-error hidden"></div>
+        <button type="submit" class="btn-primary btn-full">Login</button>
+      </form>
+      <div style="margin-top: 1.5rem; text-align: center;">
+        <a href="index.html" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 0.9rem; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.7)'">Go to Admin Portal</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="empMainApp" class="hidden">
+    <!-- Sidebar -->
+    <aside class="emp-sidebar" id="empSidebar">
+      <div class="sidebar-header">
+        <img src="icon.png" alt="Logo" class="sidebar-logo-img" />
+        <div class="sidebar-title">
+          <span class="title-main">Employee Portal</span>
+          <span class="title-sub">Ayush Fly Ash</span>
+        </div>
+        <button class="sidebar-close" onclick="document.getElementById('empSidebar').classList.remove('active')" style="display: none;">✕</button>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="empNavigateTo('dashboard', this)">
+          <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" onclick="empNavigateTo('quotas', this)">
+          <span class="nav-icon">➕</span><span class="nav-label">Quotas & Billing</span>
+        </a>
+        <a href="#" class="nav-item" onclick="empNavigateTo('requests', this)">
+          <span class="nav-icon">📝</span><span class="nav-label">My Requests</span>
+        </a>
+        <a href="#" class="nav-item" onclick="empNavigateTo('attendance', this)">
+          <span class="nav-icon">📅</span><span class="nav-label">My Attendance</span>
+        </a>
+        <a href="#" class="nav-item" onclick="empNavigateTo('payout', this)">
+          <span class="nav-icon">💰</span><span class="nav-label">My Payout</span>
+        </a>
+        <a href="#" class="nav-item" onclick="empNavigateTo('profile', this)">
+          <span class="nav-icon">👤</span><span class="nav-label">My Profile</span>
+        </a>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="admin-info">
+          <div class="admin-avatar" id="empSidebarAvatar">E</div>
+          <div class="admin-details">
+            <span class="admin-name" id="empSidebarName">Employee</span>
+            <span class="admin-role">Staff</span>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="empLogout()">🚪 Logout</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="emp-main">
+      <!-- Topbar -->
+      <header class="topbar">
+        <button class="hamburger" onclick="document.getElementById('empSidebar').classList.toggle('active')" style="display: block; background:none; border:none; color:white; font-size:1.5rem; cursor:pointer;">☰</button>
+        <div class="topbar-title" id="empPageTitle">Dashboard</div>
+        <div class="topbar-right">
+          <div class="date-display" id="empTopbarDate"></div>
+        </div>
+      </header>
+
+      <div class="page-container" style="padding: 1.5rem;">
+        
+        <!-- DASHBOARD -->
+        <div id="page-emp-dashboard" class="page active">
+          <div class="page-header">
+            <h2>Welcome back, <span id="empDashboardName" style="color: #6c63ff;"></span>!</h2>
+            <p>Here is your summary.</p>
+          </div>
+          <div class="stats-grid" id="empDashboardStats">
+            <!-- Cards filled by JS -->
+            <div class="stat-card" style="--card-color: var(--primary);">
+              <div class="stat-icon">📝</div>
+              <div class="stat-label">Total Quotas Requested</div>
+              <div class="stat-value" id="dashTotalQuotas">0</div>
+            </div>
+            <div class="stat-card" style="--card-color: var(--success);">
+              <div class="stat-icon">✅</div>
+              <div class="stat-label">Accepted Quotas</div>
+              <div class="stat-value" id="dashActiveQuotas">0</div>
+            </div>
+            <div class="stat-card" style="--card-color: var(--warning);">
+              <div class="stat-icon">💰</div>
+              <div class="stat-label">Remaining Bricks in Quotas</div>
+              <div class="stat-value" id="dashRemainingBricks">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- QUOTAS & BILLING -->
+        <div id="page-emp-quotas" class="page hidden">
+          <div class="page-header">
+            <h2>Submit New Quota</h2>
+            <p>Request material quota for new customer orders</p>
+          </div>
+          <div class="form-card" style="max-width: 600px;">
+            <form id="orderRequestForm">
+              <div class="form-group">
+                <label>Requested Value / Quota (Bricks)</label>
+                <div class="input-wrap">
+                  <input type="number" id="reqValue" placeholder="Enter amount" required />
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Notes (Optional)</label>
+                <div class="input-wrap">
+                  <textarea id="reqNotes" placeholder="Any details or justification..." rows="3"></textarea>
+                </div>
+              </div>
+              <button type="submit" class="btn-primary" style="margin-top: 1rem;">Submit Request</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- MY REQUESTS -->
+        <div id="page-emp-requests" class="page hidden">
+          <div class="page-header">
+            <h2>My Requests & Billing</h2>
+            <p>Manage your approved quotas and generate bills</p>
+          </div>
+          <div class="table-card" style="overflow-x: auto;">
+            <table class="data-table" id="empRequestsTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Requested Value</th>
+                  <th>Status</th>
+                  <th>Remaining Value</th>
+                  <th>Notes</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data filled by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MY ATTENDANCE -->
+        <div id="page-emp-attendance" class="page hidden">
+          <div class="page-header">
+            <h2>My Attendance</h2>
+            <p>View your recent attendance records</p>
+          </div>
+          <div class="table-card" style="overflow-x: auto;">
+            <table class="data-table" id="empAttendanceTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Check-In</th>
+                  <th>Check-Out</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data filled by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MY PAYOUT -->
+        <div id="page-emp-payout" class="page hidden">
+          <div class="page-header">
+            <h2>My Payout</h2>
+            <p>Your calculated payouts and wages</p>
+          </div>
+          <div class="stats-grid" style="margin-bottom: 1.5rem;">
+            <div class="stat-card" style="--card-color: var(--success);">
+              <div class="stat-icon">₹</div>
+              <div class="stat-label">Estimated Payout This Month</div>
+              <div class="stat-value" id="empEstimatedPayout">₹0</div>
+            </div>
+          </div>
+          <div class="table-card" style="overflow-x: auto;">
+            <table class="data-table" id="empPayoutTable">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Calculation Details</th>
+                  <th>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Data filled by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- MY PROFILE -->
+        <div id="page-emp-profile" class="page hidden">
+          <div class="page-header">
+            <h2>My Profile</h2>
+            <p>Your personal and employment details</p>
+          </div>
+          <div class="form-card" style="max-width: 600px;">
+            <div style="display: flex; gap: 2rem; align-items: center; margin-bottom: 2rem;">
+              <img id="profImage" src="icon.png" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary);" />
+              <div>
+                <h3 id="profName" style="margin: 0; font-size: 1.5rem;">Name</h3>
+                <p id="profRole" style="margin: 0.25rem 0 0 0; color: var(--text3);">Role / Dept</p>
+                <div class="emp-status-badge" style="margin-top: 0.5rem; display: inline-block;">Active</div>
+              </div>
+            </div>
+            
+            <div class="detail-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+              <div class="detail-item">
+                <label style="color: var(--text3); font-size: 0.85rem;">Employee ID</label>
+                <div id="profId" style="font-weight: 500;">-</div>
+              </div>
+              <div class="detail-item">
+                <label style="color: var(--text3); font-size: 0.85rem;">Phone</label>
+                <div id="profPhone" style="font-weight: 500;">-</div>
+              </div>
+              <div class="detail-item">
+                <label style="color: var(--text3); font-size: 0.85rem;">Email</label>
+                <div id="profEmail" style="font-weight: 500;">-</div>
+              </div>
+              <div class="detail-item">
+                <label style="color: var(--text3); font-size: 0.85rem;">Base Salary</label>
+                <div id="profSalary" style="font-weight: 500;">-</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Employee Billing Modal -->
+  <div class="modal-overlay hidden" id="empBillingModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Generate Bill from Quota</h3>
+        <button onclick="document.getElementById('empBillingModal').classList.add('hidden')">✕</button>
+      </div>
+      <form id="empBillingForm">
+        <input type="hidden" id="empBillOrderId" />
+        <div class="form-group">
+          <label>Customer Name *</label>
+          <input type="text" id="empBillCustomerName" required />
+        </div>
+        <div class="form-group">
+          <label>Customer Phone *</label>
+          <input type="text" id="empBillCustomerPhone" required />
+        </div>
+        <div class="form-group">
+          <label>Customer Address *</label>
+          <input type="text" id="empBillCustomerAddress" required />
+        </div>
+        <div class="form-row" style="display: flex; gap: 1rem;">
+          <div class="form-group" style="flex: 1;">
+            <label>Bricks Amount *</label>
+            <input type="number" id="empBillBricks" min="1" required />
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label>Rate Per Brick (₹) *</label>
+            <input type="number" id="empBillRate" min="0" step="0.01" required />
+          </div>
+        </div>
+        <div class="form-row" style="display: flex; gap: 1rem;">
+          <div class="form-group" style="flex: 1;">
+            <label>Worker Charge (₹)</label>
+            <input type="number" id="empBillWorker" min="0" value="0" />
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label>Transport Charge (₹)</label>
+            <input type="number" id="empBillTransport" min="0" value="0" />
+          </div>
+        </div>
+        <div class="form-row" style="display: flex; gap: 1rem;">
+          <div class="form-group" style="flex: 1;">
+            <label>Payment Status</label>
+            <select id="empBillPaymentStatus" required onchange="document.getElementById('empPartialAmountDiv').style.display = this.value === 'Partial' ? 'block' : 'none'">
+              <option value="Pending">Pending</option>
+              <option value="Paid">Paid</option>
+              <option value="Partial">Partial</option>
+            </select>
+          </div>
+          <div class="form-group" id="empPartialAmountDiv" style="display: none; flex: 1;">
+            <label>Amount Paid (₹)</label>
+            <input type="number" id="empBillAmountPaid" min="0" step="0.01" />
+          </div>
+        </div>
+        <div class="modal-footer" style="margin-top: 1rem; display: flex; justify-content: flex-end; gap: 1rem;">
+          <button type="button" class="btn-secondary" onclick="document.getElementById('empBillingModal').classList.add('hidden')">Cancel</button>
+          <button type="submit" class="btn-primary">Generate Bill</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="employee-portal.js"></script>
+  
+  <!-- Global Loader -->
+  <div id="global-loader" class="global-loader-overlay">
+    <div class="global-spinner"></div>
+  </div>
+</body>
+</html>

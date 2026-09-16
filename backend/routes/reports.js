@@ -124,7 +124,7 @@ router.get('/excel', auth, async (req, res) => {
     XLSX.utils.book_append_sheet(workbook, usageSheet, 'Inventory Usage');
 
     // === Sheet 6: Billing / Sales ===
-    const bills = await Billing.find({ date: { $gte: start, $lte: end } }).sort({ date: 1 });
+    const bills = await Billing.find({ date: { $gte: start, $lte: end }, status: 'Approved' }).sort({ date: 1 });
     const billData = bills.map(b => ({
       'Bill No': b.billNumber,
       'Date': new Date(b.date).toLocaleDateString('en-IN'),

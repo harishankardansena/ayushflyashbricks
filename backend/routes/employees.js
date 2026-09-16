@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Employee = require('../models/Employee');
 const { upload } = require('../utils/cloudinary');
+const bcrypt = require('bcryptjs');
 
 // GET all employees
 router.get('/', async (req, res) => {
@@ -57,6 +58,13 @@ router.post('/', upload.fields([{ name: 'profilePicture' }, { name: 'document' }
       }
     }
     employeeData.employeeId = `${prefix}${String(nextNum).padStart(2, '0')}`;
+    
+    // Auto-generate password
+    const namePart = (employeeData.name || 'Emp').substring(0, 4).replace(/\s/g, '');
+    const phoneStr = employeeData.phone || '0000';
+    const phonePart = phoneStr.length >= 4 ? phoneStr.slice(-4) : '0000';
+    const rawPassword = `${namePart}@${phonePart}`;
+    employeeData.password = await bcrypt.hash(rawPassword, 10);
     
     const newEmployee = new Employee(employeeData);
     const savedEmployee = await newEmployee.save();

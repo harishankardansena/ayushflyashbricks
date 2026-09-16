@@ -8,6 +8,7 @@ router.get('/dues', auth, async (req, res) => {
   try {
     // We look for bills that are Pending or Partial, or where amountPaid is less than finalAmount
     const bills = await Billing.find({
+      status: 'Approved',
       $or: [
         { paymentStatus: { $in: ['Pending', 'Partial'] } },
         { $expr: { $lt: ['$amountPaid', '$finalAmount'] } }

@@ -19,15 +19,23 @@ router.get('/report', auth, async (req, res) => {
   }
 });
 
+// Get attendance for a specific worker
+router.get('/worker/:id', auth, async (req, res) => {
+  try {
+    const records = await Attendance.find({ worker: req.params.id }).sort({ date: -1 }).limit(30);
+    res.json(records);
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Bulk log attendance for a date
 router.post('/bulk', auth, async (req, res) => {
   try {
     const { date, entries } = req.body;
-    const results = [];
-
-    for (const entry of entries) {
+    const updatePromises = entries.map(async (entry) => {
       const worker = await Employee.findById(entry.workerId);
-      if (!worker) continue;
+      if (!worker) return null;
 
       let multiplier = 1;
       if (entry.status === 'Absent')   multiplier = 0;
@@ -36,7 +44,7 @@ router.post('/bulk', auth, async (req, res) => {
       const dailyWage = (worker.salary || 0) / 30;
       const wageEarned = (dailyWage * multiplier) + ((entry.overtimeHours || 0) * (dailyWage / 8));
 
-      const record = await Attendance.findOneAndUpdate(
+      return Attendance.findOneAndUpdate(
         { worker: entry.workerId, date: new Date(date) },
         {
           status: entry.status,
@@ -45,8 +53,9 @@ router.post('/bulk', auth, async (req, res) => {
         },
         { upsert: true, new: true }
       );
-      results.push(record);
-    }
+    });
+
+    const results = (await Promise.all(updatePromises)).filter(r => r !== null);
     res.json({ message: 'Attendance updated', count: results.length });
   } catch (err) {
     console.error(err);
