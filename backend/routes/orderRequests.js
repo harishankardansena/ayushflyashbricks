@@ -135,4 +135,18 @@ router.put('/:id/settle', async (req, res) => {
   }
 });
 
+// Delete an order request
+router.delete('/:id', async (req, res) => {
+  try {
+    const request = await OrderRequest.findByIdAndDelete(req.params.id);
+    if (!request) {
+      return res.status(404).json({ message: 'Order request not found' });
+    }
+    res.json({ message: 'Order request deleted' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

@@ -2075,6 +2075,10 @@ async function fetchAdminOrderRequests() {
         `;
       }
 
+      actionBtns += `
+        <button class="btn-primary" style="padding:4px 8px; font-size:0.8rem; background: var(--danger); margin-top: 5px;" onclick="deleteOrderRequest('${req._id}')">Delete</button>
+      `;
+
       return `
         <tr>
           <td>${formatDate(req.createdAt)}</td>
@@ -2232,4 +2236,57 @@ async function approveBill(billId) {
   } catch (err) {
     showToast(err.message || 'Error approving bill', 'error');
   }
+}
+
+async function deleteOrderRequest(id) {
+  if (!confirm('Are you sure you want to delete this order request?')) return;
+  try {
+    const res = await apiFetch(`/orders/${id}`, 'DELETE');
+    if (!res.ok) throw new Error('Delete failed');
+    showToast('Order request deleted', 'success');
+    fetchAdminOrderRequests();
+  } catch (err) {
+    showToast('Failed to delete order request', 'error');
+  }
+}
+
+async function openAdminOrderRequestModal() {
+  try {
+    const res = await apiFetch('/employees');
+    if (res.ok) {
+      const employees = await res.json();
+      const select = document.getElementById('adminReqEmployeeId');
+      select.innerHTML = '<option value="">Select Employee</option>';
+      employees.forEach(emp => {
+        const opt = document.createElement('option');
+        opt.value = emp._id;
+        opt.textContent = `${emp.name} (${emp.employeeId})`;
+        select.appendChild(opt);
+      });
+      document.getElementById('adminOrderRequestForm').reset();
+      openModal('adminOrderRequestModal');
+    }
+  } catch (err) {
+    showToast('Failed to load employees', 'error');
+  }
+}
+
+if (document.getElementById('adminOrderRequestForm')) {
+  document.getElementById('adminOrderRequestForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const employeeId = document.getElementById('adminReqEmployeeId').value;
+    const requestedValue = document.getElementById('adminReqValue').value;
+    const notes = document.getElementById('adminReqNotes').value;
+
+    try {
+      const res = await apiFetch('/orders/request', 'POST', { employeeId, requestedValue: Number(requestedValue), notes });
+      if (!res.ok) throw new Error('Failed to create request');
+      
+      showToast('Order request added successfully', 'success');
+      closeModal('adminOrderRequestModal');
+      fetchAdminOrderRequests();
+    } catch (err) {
+      showToast('Error adding request', 'error');
+    }
+  });
 }

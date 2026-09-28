@@ -166,8 +166,11 @@
         <!-- REQUESTS PAGE -->
         <div id="page-requests" class="page">
           <div class="page-header">
-            <h2>Requests</h2>
-            <p>Manage order requests and bill requests</p>
+            <div>
+              <h2>Requests</h2>
+              <p>Manage order requests and bill requests</p>
+            </div>
+            <button class="btn-primary" onclick="openAdminOrderRequestModal()">+ Add Order Request</button>
           </div>
           
           <!-- Overdue Notifications Banner -->
@@ -857,6 +860,37 @@
       </form>
     </div>
   </div>
+
+  <!-- Admin Add Order Request Modal -->
+  <div class="modal-overlay hidden" id="adminOrderRequestModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Add Order Request (Admin)</h3>
+        <button onclick="closeModal('adminOrderRequestModal')">✕</button>
+      </div>
+      <form id="adminOrderRequestForm">
+        <div class="form-group">
+          <label>Employee *</label>
+          <select id="adminReqEmployeeId" required>
+            <option value="">Select Employee</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Requested Value (₹) *</label>
+          <input type="number" id="adminReqValue" min="0" required placeholder="e.g. 50000" />
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="adminReqNotes" rows="2" placeholder="Optional notes..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" onclick="closeModal('adminOrderRequestModal')">Cancel</button>
+          <button type="submit" class="btn-primary">Submit Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
 
 
 

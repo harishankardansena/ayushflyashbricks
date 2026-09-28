@@ -30,7 +30,7 @@ window.fetch = async function(...args) {
   return originalFetch.apply(this, args);
 };
 
-const EMP_API_URL = "http://localhost:5000/api";
+const EMP_API_URL = window.location.origin.includes('localhost') ? "http://localhost:5000/api" : "/api";
 const API_BASE = EMP_API_URL;
 
 // DOM Elements
